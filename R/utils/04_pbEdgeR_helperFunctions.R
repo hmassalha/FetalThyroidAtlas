@@ -133,3 +133,72 @@ plotPCA_inhouse_edgeR = function (count, mdat,intgroup = "condition", ntop = 500
   }
 }
 
+
+annotateGenes = function(geneTable,geneMap=NULL,tfMap=NULL,membrane_protein=NULL,cosmicGenes=NULL,tsg=NULL){
+  if(is.null(geneMap)){
+    ## Generic gene map
+    geneMap = read.delim('/lustre/scratch126/casm/team274sb/bl10/B-ALL/Data/MLDS_GEX/cellranger700_count_45842_SB_Leuk13104278_GRCh38-2020-A/filtered_feature_bc_matrix/features.tsv.gz',header = F)
+    colnames(geneMap) = c('ensID','geneSym','GEX')
+    geneMap$geneSym[duplicated(geneMap$geneSym)] = paste0(geneMap$geneSym[duplicated(geneMap$geneSym)],'.1')
+    geneMap$geneSym = gsub('_','-',geneMap$geneSym)
+    
+    
+    #Define genomic coordinates
+    require(GenomicFeatures)
+    gtf = '/nfs/srpipe_references/downloaded_from_10X/refdata-gex-GRCh38-2020-A/genes/genes.gtf'
+    txdb = makeTxDbFromGFF(gtf)
+    gns = genes(txdb)
+    geneMap$chr = as.character(seqnames(gns[match(geneMap$ensID,gns$gene_id)]))
+    
+  }
+  
+  if(is.null(tfMap)){
+    ## TF list
+    # https://humantfs.ccbr.utoronto.ca/download.php
+    #tfMap = read.table('~/lustre_mt22/generalResources/TF_list/Homo_sapiens_transcription_factors_gene_list.txt',sep = '\t')
+    tfMap = read.csv('~/lustre_mt22/generalResources/TF_list/DatabaseExtract_v_1.01.csv',row.names = 1)
+    # colnames(tfMap) = tfMap[1,]
+    # tfMap = tfMap[-1,]  
+  }
+  
+  if(is.null(membrane_protein)){
+    ## membrane protein list
+    membrane_protein = read.csv('~/lustre_mt22/generalResources/proteomic_databases/curated_transmembrane_cellsurface_proteins.csv')
+    # Keep high confidence genes
+    membrane_protein = membrane_protein[membrane_protein$confidence_score >=2,]
+    membrane_protein$ensID = geneMap$ensID[match(membrane_protein$gene_name,geneMap$geneSym)]
+    
+  }
+  
+  if(is.null(cosmicGenes)){
+    ## COSMIC gene list
+    #cosmicGenes = read.csv('~/lustre_mt22/generalResources/cosmic_cancer_gene_list.csv')
+    cosmicGenes = read.delim('~/lustre_mt22/generalResources/COSMIC_v100_202408/Cosmic_CancerGeneCensus_v100_GRCh38.tsv.gz',sep = '\t')
+    
+  }
+  
+  if(is.null(tsg)){
+    # https://bioinfo.uth.edu/TSGene/download.cgi
+    tsg = read.delim('~/lustre_mt22/generalResources/Human_TSGs.txt',header = T)
+  }
+  
+  if(!'ensID' %in% colnames(geneTable)){
+    geneTable$ensID = rownames(geneTable)  
+  }
+  
+  geneTable$geneSym = geneMap$geneSym[match(geneTable$ensID,geneMap$ensID)]
+  geneTable$chr = geneMap$chr[match(geneTable$ensID,geneMap$ensID)]
+  
+  # Mark TFs
+  geneTable$isTF = geneTable$ensID %in% tfMap$`Ensembl ID`
+  # Mark CellSurfaceMarkers
+  geneTable$isCSM = geneTable$ensID %in% membrane_protein$ensID
+  # Mark COSMIC genes
+  geneTable$isCosmic = geneTable$geneSym %in% cosmicGenes$Gene.Symbol
+  geneTable$cosmicTier = ifelse(geneTable$isCosmic, cosmicGenes$Tier[match(geneTable$geneSym,cosmicGenes$Gene.Symbol)],'')
+  geneTable$tumourType = ifelse(geneTable$isCosmic, cosmicGenes$Tumour.Types.Somatic.[match(geneTable$geneSym,cosmicGenes$Gene.Symbol)],'')
+  # Mark TSG
+  geneTable$isTSG = geneTable$geneSym %in% tsg$GeneSymbol
+  
+  return(geneTable)
+}

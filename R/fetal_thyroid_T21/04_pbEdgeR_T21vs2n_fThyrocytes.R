@@ -66,7 +66,8 @@ srat = readRDS(fThyroid_2nT21_fp)
 
 
 ### Plot proportion of fTFC1 vs fTFC2 in 2n vs T21
-dd = srat@meta.data %>% group_by(karyotype,donor,pcw,celltype) %>% summarise(nCell = n()) %>% 
+dd = srat@meta.data %>% filter(celltype %in% c('thy_TH_processing','thy_Lumen-forming')) %>% 
+  group_by(karyotype,donor,pcw,celltype) %>% summarise(nCell = n()) %>% 
   group_by(karyotype,donor,pcw) %>% mutate(totalCell = sum(nCell), frac = nCell/totalCell)
 dd$celltype[dd$celltype == 'thy_Lumen-forming'] = 'fTFC2'
 dd$celltype[dd$celltype == 'thy_TH_processing'] = 'fTFC1'
