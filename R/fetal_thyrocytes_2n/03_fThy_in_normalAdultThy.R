@@ -16,7 +16,6 @@ if(!dir.exists(plotDir)){
 ##----------------##
 library(Seurat)
 library(tidyverse)
-#source("~/lustre_mt22/Thyroid/scripts/final_script/forPublication/v1/helperFunctions.R")
 source("R/utils/logisticRegression.R")
 source("R/utils/runLR.R")
 
@@ -44,7 +43,6 @@ if('Mosteiro23' %in% names(datasets_fp)){
 }
 
 if('Hong23' %in% names(datasets_fp)){
-  #aThy_Hong23 = readRDS('~/lustre_mt22/Thyroid/Data/published_scRNAseq/Hong_etal_2023/GSE182416_sratObj.RDS')
   aThy_Hong23 = readRDS(datasets_fp['Hong23'])
   aThy_Hong23$annot = as.character(aThy_Hong23$celltype_sub)
   aThy_Hong23$dataset = 'aThy_Hong23'
@@ -75,7 +73,6 @@ if('Wang22' %in% names(datasets_fp)){
 
 
 if('Lu23' %in% names(datasets_fp)){
-  
   aThy_Lu23 = readRDS(datasets_fp['Lu23'])
   
   # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
@@ -107,54 +104,8 @@ with_SCPs = T
 ##---- Import REF dataset ------##
 ## Import fetal 2n thyrocytes only
 fThy_fp = 'Data/fThyrocytes_2n_atlas.RDS'
-if(!file.exists(fThy_fp)){
-    # Create a seurat object of just thyrocytes from diploid fetuses
-    fThyroid = Read10X('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n')
-    fThyroid = CreateSeuratObject(fThyroid)
-    # Add metadata
-    mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_obs.csv.gz',row.names = 1)
-    table(rownames(mdat) %in% rownames(fThyroid@meta.data))
-    table(colnames(fThyroid@meta.data) %in% colnames(mdat))
-    fThyroid@meta.data =  cbind(fThyroid@meta.data,mdat[match(rownames(fThyroid@meta.data),rownames(mdat)),!colnames(mdat) %in% colnames(fThyroid@meta.data)])
-    # Add UMAP_coords
-    fThyroid = standard_clustering(fThyroid)
-    umap = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_UMAP.csv.gz')
-    umap = column_to_rownames(umap,'X')
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_1'] = umap$UMAP_1[match(rownames(fThyroid@meta.data),rownames(umap))]
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_2'] = umap$UMAP_2[match(rownames(fThyroid@meta.data),rownames(umap))]
-    DimPlot(fThyroid,group.by = 'cluster',label = T,label.box = T,repel = T) + NoLegend()
-    saveRDS(fThyroid,'Data/fThyroid_2n_atlas.RDS')
-    
-    
-    ## Similarly for 2n-T21 object
-    # Create a seurat object of just thyrocytes from diploid fetuses
-    fThyroid_2nT21 = Read10X('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2nT21/mtx/')
-    fThyroid = CreateSeuratObject(fThyroid)
-    # Add metadata
-    mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_obs.csv.gz',row.names = 1)
-    table(rownames(mdat) %in% rownames(fThyroid@meta.data))
-    table(colnames(fThyroid@meta.data) %in% colnames(mdat))
-    fThyroid@meta.data =  cbind(fThyroid@meta.data,mdat[match(rownames(fThyroid@meta.data),rownames(mdat)),!colnames(mdat) %in% colnames(fThyroid@meta.data)])
-    # Add UMAP_coords
-    fThyroid = standard_clustering(fThyroid)
-    umap = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_UMAP.csv.gz')
-    umap = column_to_rownames(umap,'X')
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_1'] = umap$UMAP_1[match(rownames(fThyroid@meta.data),rownames(umap))]
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_2'] = umap$UMAP_2[match(rownames(fThyroid@meta.data),rownames(umap))]
-    DimPlot(fThyroid,group.by = 'cluster',label = T,label.box = T,repel = T) + NoLegend()
-    saveRDS(fThyroid,'Data/fThyroid_2n_atlas.RDS')
-    
-    
-    
-    
-    fThy = subset(fThyroid,subset = cluster == 'Thyrocytes')
-    fThy = standard_clustering(fThy)
-    saveRDS(fThy,fThy_fp)
-}else{
-  fThy = readRDS(fThy_fp)  
-  fThy$cellID = rownames(fThy@meta.data)
-}
-
+fThy = readRDS(fThy_fp)  
+fThy$cellID = rownames(fThy@meta.data)
 fThy$finalAnn = fThy[[annot_column]]
 fThy$cellID = colnames(fThy)
 fThy = subset(fThy,subset = cellID %in% fThy$cellID[!fThy$celltype %in% c('thy_Cycling')])
