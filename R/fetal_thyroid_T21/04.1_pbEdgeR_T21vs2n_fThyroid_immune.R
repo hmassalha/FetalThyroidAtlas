@@ -85,6 +85,7 @@ if(!keepCylcingCells){
 
 out = list()
 pb_byCT = list()
+minCell = 20
 
 for(tgtCell in unique(srat$finalAnn)){
   
@@ -94,7 +95,7 @@ for(tgtCell in unique(srat$finalAnn)){
   #Check we have a reasonable number of counts from both settings. ie Get number of cells for the relevant cell type and genenotype
   nCellsGroup = table(factor(srat.sub@meta.data$Genotype))
   
-  if((!all(nCellsGroup>=50))){
+  if((!all(nCellsGroup>=minCell))){
     message(sprintf('Low number of cells detected'))
     print(nCellsGroup)
     next
@@ -102,7 +103,7 @@ for(tgtCell in unique(srat$finalAnn)){
   
   #Check how many from individual donors
   nCells = table(srat.sub@meta.data$donorID)
-  if(sum(nCells>50)<3){
+  if(sum(nCells>=minCell)<3){
     message(sprintf("Too few effective replicates.  Skipping..."))
     print(nCells)
     next
@@ -112,7 +113,15 @@ for(tgtCell in unique(srat$finalAnn)){
   
   
   # remove individuals with < 30 cells
-  donorID_toKeep = names(nCells[nCells >= 30])
+  donorID_toKeep = names(nCells[nCells >= minCell])
+  
+  # Make sure that we still have at least 2 groups for comparison afer this step
+  if(n_distinct(srat$Genotype[srat$donor %in% donorID_toKeep]) < 2){
+    message(sprintf('Not enough groups for comparison'))
+    print(unique(srat$Genotype[srat$donor %in% donorID_toKeep]))
+    next
+  }
+  
   
   #OK, we're going ahead, create the needed objects
   toc = srat.sub@assays$RNA@counts[,colnames(srat.sub@assays$RNA@counts) %in% srat.sub$cellID[srat.sub$donorID %in% donorID_toKeep]]
@@ -287,6 +296,10 @@ df = deg %>% group_by(comp,direction) %>% summarise(nGene = n())
 df$nGene[df$direction == 'T21_down'] = -df$nGene[df$direction == 'T21_down']
 ggplot(df,aes('',nGene,fill=direction))+
   geom_col(width = 0.58)+
+  geom_text(aes(label = nGene), 
+            position = position_stack(vjust = 0.5), 
+            vjust = ifelse(df$nGene > 0, -0.5, 1.5), 
+            size = 3) +
   geom_hline(yintercept = 0)+
   scale_fill_manual(values = c('#1a4a87','#a4282c','#5878a1','#b36d6e'))+
   facet_wrap(vars(comp),nrow=1)+
