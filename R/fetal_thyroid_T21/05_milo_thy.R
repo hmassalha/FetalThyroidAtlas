@@ -97,6 +97,110 @@ differential_abundance_testing = function(srat,reduced_dims = 'PCA',k = 50, d = 
 
 
 
+###-------------------------------------------------------------------------------------##
+###      Fractional composition of immune cell types in 2n + T21 fetal thyroid       #####
+###-------------------------------------------------------------------------------------##
+imm_2n_T21_fp = '~/FetalThyroidAtlas/Data/fThyroid_2nT21_agematched_atlas.RDS'
+srat = readRDS(imm_2n_T21_fp)
+mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2nT21/fThyroid_2nT21_obs.csv.gz')
+dd = mdat %>% filter(grepl('^imm_',celltype)) %>% 
+  group_by(donor, karyotype,age_group,celltype,cluster) %>% summarise(nCell = n()) %>% 
+  group_by(donor, karyotype,age_group) %>% mutate(total_imm_cell = sum(nCell),
+                                                  frac = nCell/total_imm_cell,
+                                                  celltype = gsub('^imm_','',celltype))
+dd$cluster = factor(dd$cluster,c('B_cells','ILCs','T_cells', 'NK_cells','Myeloid'))
+dd$celltype = factor(dd$celltype,gsub('imm_','',c("imm_PreB_cells","imm_B_cells",
+                                   "imm_ILC","imm_Type1_Innate_T","imm_T_cells","imm_Cycling_T", 
+                                   "imm_NK_cells","imm_Cycling_NK_cells",      
+                                   "imm_Mast_cells",
+                                   'imm_PDC/DC1',"imm_DC2",
+                                   "imm_Monocytes","imm_Macrophages")))
+
+library(ggbeeswarm)
+ggplot(dd,aes(x=karyotype,y=frac))+
+  geom_boxplot(outlier.shape=NA,aes(fill=karyotype))+
+  geom_quasirandom(size=1)+
+  facet_grid(age_group~cluster+celltype,space='free',scales='free')+
+  theme_classic(base_size = 13)+
+  theme(panel.border = element_rect(fill=NA,color='black'),
+        axis.line = element_blank(),strip.background = element_blank(),
+        axis.text = element_text(color='black'),axis.ticks = element_line(color='black'),
+        panel.grid.major = element_line())+
+  xlab('Karyotype') + ylab('Fraction of all immune cells per donor')+
+  scale_fill_manual(values = c('T21'='#849978','2n'='#7e5f97'))
+  
+ggpubr::stat_compare_means(
+    aes(group = karyotype),
+    method = "wilcox.test",
+    label = "p.signif",  # will show *, **, *** for significance
+    label.y = max(dd$frac) * 1.05   # position above boxes
+  )
+
+
+
+ggplot(dd, aes(x = karyotype, y = frac)) +
+  geom_boxplot(outlier.shape = NA, aes(fill = karyotype)) +
+  geom_quasirandom(size = 0.5) +
+  facet_grid(age_group ~ cluster + celltype, space = 'free', scales = 'free') +
+  theme_classic() +
+  theme(panel.border = element_rect(fill = NA, color = 'black'),
+        axis.line = element_blank(),
+        strip.background = element_blank(),
+        panel.grid.major = element_line()) +
+  
+write.csv(dd,'Results/2505/immune_composition_T21_vs_2n.csv')
+
+pvals <- dd %>%
+  group_by(age_group, cluster, celltype) %>%
+  summarise(
+    prop_test = {
+      # counts per karyotype
+      x <- sum(karyotype == "T21")
+      n1 <- sum(karyotype == "T21") + sum(karyotype == "2n")
+      n2 <- sum(karyotype == "2n")
+      # fraction T21
+      p1 <- mean(frac[karyotype == "T21"])
+      p2 <- mean(frac[karyotype == "2n"])
+      
+      # Using prop.test in R
+      res <- prop.test(x = c(x, n2*p2), n = c(n1, n2))
+      res$p.value
+    }
+  ) %>% ungroup()
+
+
+
+
+
+fThy_2n_obs = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_obs.csv.gz')
+dd = fThy_2n_obs %>% filter(grepl('^imm_',celltype)) %>% 
+  mutate(age_group = ifelse(pcw %in% c(9,10),'9-10',
+                            ifelse(pcw %in% c(11:13),'11-13','14-20'))) %>% 
+  group_by(donor,pcw,age_group,celltype,cluster) %>% summarise(nCell = n()) %>% 
+  group_by(donor,pcw,age_group) %>% mutate(total_imm_cell = sum(nCell),
+                                       frac = nCell/total_imm_cell)
+dd$age_group = factor(dd$age_group,c('9-10','11-13','14-20'))
+library(ggbeeswarm)
+dd$celltype = factor(dd$celltype,c("imm_Pro-B_cells","imm_B_cells",
+                                   "imm_ILCs","imm_DN/DP_T_cells","imm_T_cells","imm_Cycling_T_cells", 
+                                   "imm_Cycling_NK","imm_NK_cells",      
+                                   "imm_MEMP","imm_Mast_cells",
+                                   "imm_DC_prec","imm_DC2",
+                                   "imm_Monocytes","imm_Macrophages"
+                                   ))
+dd$cluster = factor(dd$cluster,c('B_cells','T_cells', 'NK_cells','Myeloid','Monocytes'))
+ggplot(dd,aes(x=age_group,y=frac))+
+  geom_boxplot(outlier.shape=NA,aes(fill=age_group))+
+  geom_quasirandom(size=0.5)+
+  facet_grid(.~cluster+celltype,space='free')+
+  theme_classic()+
+  theme(panel.border = element_rect(fill=NA,color='black'),
+        axis.line = element_blank(),strip.background = element_blank(),
+        panel.grid.major = element_line(),
+        axis.text.x = element_text(angle = 90,vjust = 0.5,hjust = 1))
+
+write.csv(dd,'Results/2505/immune_composition_2n.csv')
+
 
 
 ###---------------------------------------------------------------------------------------------##

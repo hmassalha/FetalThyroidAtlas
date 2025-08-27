@@ -556,6 +556,7 @@ moduleList[['fTFC1_combined']] = list('down' = moduleList[['fTFC2']],
 #bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('TCGA_Thyroid','He2021','inhouse'))
 bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('inhouse'='Data/inhouse_bulk/inhouse_bulkRNA_fetalThyroid_paedPTC.RDS',
                                                   'TCGA_Thyroid'='Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS',
+                                                  'REBC_THYR' = 'Data/published_bulkRNAseq/REBC_THYR_se.RDS',
                                                   'He2021'='Data/published_bulkRNAseq/He_etal_21/aPTC_He_2021_se.RDS',
                                                   'Lee2024' = 'Data/published_bulkRNAseq/Lee_etal_24/aPTC_Lee_2024_se.RDS'),gene_map = gene_map)
 bulk_samples = bulkRNA[['bulk_samples']]
@@ -866,5 +867,79 @@ fig4b_heatmap_bulkRNA = function(){
   
   
 }
+
+
+# 3.-- Additional dataset REBC-THYR -----------------
+rebc_thyr_scores = read.delim('~/thyroid/data/REBC-THYR-bulk-TPMs.scores.tsv',sep = '\t')
+rebc_mdat = read.delim('~/thyroid/data/REBC-THYR.metadata.tsv',sep='\t',header = F)
+rebc_clinical = read.delim('~/FetalThyroidAtlas/Data/published_bulkRNAseq/Morton_21_TableS1_abg2538-data-s1.txt',sep='\t',header = T)
+rebc_sample_sheet = read.delim('~/FetalThyroidAtlas/Data/published_bulkRNAseq/gdc_sample_sheet.2025-08-21.tsv',sep='\t')
+rebc_sample_sheet$Case.ID = gsub('-YQ','',rebc_sample_sheet$Case.ID)
+
+table(rebc_sample_sheet$Case.ID %in% rebc_clinical$REBC_ID)
+table(rebc_clinical$REBC_ID %in% rebc_sample_sheet$Case.ID)
+rebc_clinical$REBC_ID[!rebc_clinical$REBC_ID %in% rebc_sample_sheet$Case.ID]
+rebc_sample_sheet$Case.ID[!rebc_sample_sheet$Case.ID %in% rebc_clinical$REBC_ID]
+
+rebc_sample_sheet = left_join(rebc_sample_sheet,rebc_clinical,by=c('Case.ID' = 'REBC_ID'))
+rebc_sample_sheet$file_name = gsub('\\.rna_seq.augmented_star_gene_counts.tsv$','',rebc_sample_sheet$File.Name)
+table(rebc_thyr_scores$Row.names %in% rebc_sample_sheet$file_name)
+
+colnames(rebc_mdat) = c('sample','tissue_type')
+table(rebc_thyr_scores$Row.names %in% rebc_sample_sheet$file_name)
+rebc_thyr_scores = left_join(rebc_thyr_scores,rebc_sample_sheet,by=c('Row.names'='file_name'))
+rebc_thyr_scores$age_group = ifelse(rebc_thyr_scores$AGE_SURGERY <= 10,'<=10',
+                                    ifelse(rebc_thyr_scores$AGE_SURGERY <= 16,'<=16','>16'))
+rebc_thyr_scores$age_group = factor(rebc_thyr_scores$age_group,c('<=10','<=16','>16'))
+
+ggplot(rebc_thyr_scores,aes(AGE_SURGERY,TotalScore,group=Tissue.Type,col=Tissue.Type))+
+  geom_point(aes())+
+  geom_smooth()+
+  facet_wrap(vars(moduleType))
+
+ggplot(rebc_thyr_scores,aes(Tissue.Type,TotalScore))+
+  geom_boxplot(aes(fill=Tissue.Type))+
+  geom_quasirandom(size=1,width = 0.2)+
+  facet_grid(age_group ~ moduleType)
+
+
+# 3.-- Additional dataset Junak. 2016 GSE35570 -----------------
+junak16 = read.delim('~/thyroid/data/gse35570_scores.tsv')
+junak16$group = ifelse(grepl('normal',junak16$Tumor_type),'normal',
+                       ifelse(junak16$Age_operation <= 12,'<=10',
+                              ifelse(junak16$Age_operation <= 16,'<=16','>16')))
+junak16$group = factor(junak16$group,c('normal','<=10','<=16','>16'))
+ggplot(junak16,aes(group,TotalScore))+
+  geom_boxplot(aes(fill=group),outlier.shape = NA)+
+  geom_quasirandom(aes(col=Tumor_type),size=1,width = 0.2)+
+  facet_wrap(vars(moduleType),scales = 'free_y')
+
+ggplot(junak16,aes(Age_operation,TotalScore))+
+  geom_point(aes(co))+
+  facet_wrap(vars(moduleType))
+
+
+dom12 = read.delim('~/thyroid/data/gse33630_scores.tsv',sep = '\t')
+dom12$donorID = paste0('UA',gsub('N$|T$','',dom12$Title))
+dom12 = dom12[!grepl('ATC',dom12$Title),]
+
+dom12_mdat = read_excel('~/FetalThyroidAtlas/Data/published_bulkRNAseq/Dom12_clinicaldata_bjc2012302x1.xls')
+dom12_mdat = dom12_mdat[!is.na(dom12_mdat$`Exposed Paired samples`) & dom12_mdat$`Exposed Paired samples` != 'Non exposed Paired samples',]
+dom12_mdat$donorID = gsub('N$|T$','',dom12_mdat$`Exposed Paired samples`)
+table(dom12$donorID %in% dom12_mdat$donorID)
+
+dom12 = left_join(dom12,dom12_mdat,by='donorID')
+dom12$group = ifelse(grepl('N$',dom12$Title),'normal','tumour')
+dom12$age_group = ifelse(dom12$`Age at operation` <=16,'<=16','>16')
+dom12$age_group = factor(dom12$age_group,c('<=16','>16'))
+ggplot(dom12,aes(age_group,TotalScore))+
+  geom_boxplot(aes(fill=group),outlier.shape = NA)+
+  geom_quasirandom(aes(col=Tumor_type),size=1,width = 0.2)+
+  facet_wrap(vars(moduleType),scales = 'free_y')
+
+
+ggplot(dom12,aes(`Age at operation`,TotalScore))+
+  geom_point(aes(col=group),size=0.6)+
+  facet_wrap(vars(moduleType))
 
 

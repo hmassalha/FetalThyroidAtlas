@@ -112,7 +112,7 @@ for(tgtCell in unique(srat$finalAnn)){
   print(nCells)
   
   
-  # remove individuals with < 30 cells
+  # remove individuals with < minCell cells
   donorID_toKeep = names(nCells[nCells >= minCell])
   
   # Make sure that we still have at least 2 groups for comparison afer this step
