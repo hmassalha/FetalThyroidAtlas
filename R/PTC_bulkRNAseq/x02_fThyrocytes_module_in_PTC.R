@@ -112,7 +112,9 @@ source('R/utils/sc_utils.R')
 
 adult_PTC_dataset_list = c('Pu21'='Data/published_scRNAseq/Pu_etal_2021/Pu_etal_2021.RDS',
                       'Lu23'='Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023.RDS',
-                      'Peng21'='Data/published_scRNAseq/Peng_etal_2021/Peng_etal_2021_thyOnly.RDS')
+                      'Peng21'='Data/published_scRNAseq/Peng_etal_2021/Peng_etal_2021_thyOnly.RDS',
+                      'Zheng25' = 'Data/published_scRNAseq/Zheng_etal_2025/Zheng25/Zheng25_clean_noMTCells.RDS')
+
 adult_PTC_sratObj_list = list()
 for(dataset in names(adult_PTC_dataset_list)){
   srat = readRDS(adult_PTC_dataset_list[[dataset]])
@@ -136,6 +138,11 @@ for(dataset in names(adult_PTC_dataset_list)){
     ## Peng et al., 2021
     srat = subset(srat,subset = cellID %in% srat$cellID[srat$annot %in% c('Thyrocytes','Tumour')])
     srat$dataset = 'Peng_2021'
+  }else if(dataset == 'Zheng25'){
+    zheng25_mdat = read.csv('~/FetalThyroidAtlas/Data/published_scRNAseq/Zheng_etal_2025/Zheng25/Zheng25_clean_noMTCells_mdat.csv',row.names = 1)
+    srat@meta.data = cbind(srat@meta.data,zheng25_mdat[match(srat$cellID,rownames(zheng25_mdat)),!colnames(zheng25_mdat) %in% colnames(srat@meta.data)])
+    srat$dataset = 'Zheng_2025'
+    srat = subset(srat,subset = annot %in% c('Tumour','Thyrocytes'))
   }
   
   srat = standard_clustering(srat)
@@ -342,8 +349,8 @@ ucell_data_normal$annot[ucell_data_normal$annot %in% c('aTFC2','thy_Lumen-formin
 
 write.csv(ucell_data_normal,file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_fetal.adult.Thy.csv'))
 
-ucell_data_adult = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_adultPTC.csv'))
-ucell_data_normal = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_fetal.adult.Thy.csv'))
+ucell_data_adult = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_adultPTC.csv'),row.names = 1)
+ucell_data_normal = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_UCELL_scRNAseq_fetal.adult.Thy.csv'),row.names = 1)
 
 ## Combine them
 ucell_data_adult$annot = ucell_data_adult$annot_2
@@ -352,25 +359,48 @@ ucell_data = rbind(ucell_data_normal,ucell_data_adult[,colnames(ucell_data_norma
 ## Do some plots
 celltypes_toKeep = unique(ucell_data$annot[grepl('Thyrocyte|TFC1|TFC2|Tumour|Epithelial|Malignant|Normal',ucell_data$annot)])
 
-ggplot(ucell_data[ucell_data$annot %in% celltypes_toKeep &
-                    ucell_data$dataset %in% c('Lu_2023','Peng_2021','Pu_2021'),],aes(annot,fTFC1_UCell))+
-  geom_hline(yintercept = 0,linetype=2,col=colAlpha(grey(0.4),0.4))+
-  geom_boxplot(outlier.shape = NA,aes(fill = annot))+
-  geom_quasirandom(size = 0.1,alpha = 0.1)+
-  #scale_y_log10()+
-  scale_fill_manual(values = c('Normal' = grey(0.8),'Tumour'=colAlpha('#511378',0.8)))+
-  facet_grid(.~dataset,scales = 'free_x',space = 'free_x')+
-  # theme_classic()+
-  # theme(axis.text.x = element_text(angle=90,vjust = 0.5,hjust = 1))+
-  theme_classic()+
-  #ylim(-0.1,0.1)+
-  #ggtitle(title)+
-  xlab('')+ylab('fTFC2 signature score')+
-  theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
-        strip.background=element_rect(linewidth=0),
-        axis.text = element_text(colour = 'black'),
-        axis.ticks = element_line(colour = 'black'),
-        axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'),legend.position = 'none')
+plotFun_fTFC1.2_UCell_aPTC = function(noFrame=FALSE,noPlot=FALSE){
+  dd = ucell_data[ucell_data$annot %in% celltypes_toKeep &
+                    ucell_data$dataset %in% c('Lu_2023','Peng_2021','Pu_2021','Zheng_2025'),]
+  dd = pivot_longer(dd[,c('dataset','cellID','annot','fTFC1_UCell','fTFC2_UCell')],cols = c('fTFC1_UCell','fTFC2_UCell'),names_to = 'module',values_to = 'score')
+  dd$dataset = gsub('_',' et al., ',dd$dataset)
+  dd$module = gsub('_UCell',' signature',dd$module)
+  
+  p = ggplot(dd,aes(annot,score))+
+    scale_fill_manual(values = c('Normal' = grey(0.8),'Tumour'=colAlpha('#622A85',0.8)))+
+    facet_grid(module~dataset,scales = 'free_x',space = 'free_x')+
+    scale_y_continuous(breaks = c(0,0.1,0.2),labels = c('0.0','0.1','0.2'))+
+    theme_classic()+
+    xlab('')+ylab('Transcriptional enrichment score')+
+    theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+          strip.background=element_rect(linewidth=0),
+          axis.text = element_text(colour = 'black'),
+          axis.ticks = element_line(colour = 'black'),
+          panel.spacing.x = unit(0.5, "cm"),
+          axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'),legend.position = 'none')
+  #p
+  
+  if(noPlot & !noFrame){
+    # For plotting, subset each category (annot::dataset) to just 1000 cells
+    p1 = p+
+      geom_boxplot(outlier.shape = NA,aes(fill = annot),alpha=1)
+  }
+  
+  
+  if(!noPlot){
+    p1 = p + 
+      geom_quasirandom(size = 0.1,aes(alpha = annot))+
+      scale_alpha_manual(values = c('Tumour' = 0.01,'Normal'=0.03))+
+      geom_boxplot(outlier.shape = NA,aes(fill = annot),alpha=1)+
+      theme(panel.border = element_blank())
+  }
+  
+  print(p1)
+  
+}
+
+saveFig(file.path(plotDir,'SuppFig14e_fTFC1.2_UCell_aPTC'),plotFun_fTFC1.2_UCell_aPTC,rawData=dd,width = 4.2,height = 4.5,res = 500)
+
 
 
 ggplot(ucell_data[grepl('aTFC|Thyrocyte|Tum|Met|fTFC|Malig|Epi',ucell_data$annot),],aes(fTFC2_UCell,fTFC1_UCell,col=annot_2))+
@@ -556,9 +586,10 @@ moduleList[['fTFC1_combined']] = list('down' = moduleList[['fTFC2']],
 #bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('TCGA_Thyroid','He2021','inhouse'))
 bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('inhouse'='Data/inhouse_bulk/inhouse_bulkRNA_fetalThyroid_paedPTC.RDS',
                                                   'TCGA_Thyroid'='Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS',
-                                                  'REBC_THYR' = 'Data/published_bulkRNAseq/REBC_THYR_se.RDS',
+                                                  'REBC_THYR' = 'Data/published_bulkRNAseq/REBC-THYR/REBC_THYR_2508.RData',
                                                   'He2021'='Data/published_bulkRNAseq/He_etal_21/aPTC_He_2021_se.RDS',
-                                                  'Lee2024' = 'Data/published_bulkRNAseq/Lee_etal_24/aPTC_Lee_2024_se.RDS'),gene_map = gene_map)
+                                                  'Lee2024' = 'Data/published_bulkRNAseq/Lee_etal_24/aPTC_Lee_2024_se.RDS'),
+                                 gene_map = gene_map)
 bulk_samples = bulkRNA[['bulk_samples']]
 cpmCnt = bulkRNA[['cpmCnt']]
 tpmCnt = bulkRNA[['tpm_count']]
@@ -616,7 +647,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
   allScore$source[allScore$source == 'Yoo_2021'] = 'Yoo_2016'
   allScore$source = factor(allScore$source,c('aPTC_Pu21','aPTC_Wang22','aThy_Hong23','aThy_Mosteiro23',
                                              'GTEx_Thyroid','TCGA_Thyroid','Yoo_2016','He_2021','Lee_2024',
-                                             'stJudes_Thyroid','Lee_2021','Sanger','scRNAseq_fThy','snRNAseq_Y24.Y46'))
+                                             'stJudes_Thyroid','Lee_2021','Sanger','scRNAseq_fThy','snRNAseq_Y24.Y46','REBC_THYR_paed','REBC_THYR_adult'))
   
   allScore$group_facet_hor = allScore$source
   allScore$group_facet_ver = allScore$moduleType
@@ -652,11 +683,12 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
     allScore$group_facet_ver = allScore$moduleType
     
-    dd = allScore[grepl('FFPE|Thyrocytes|Tumour|fTFC|fThy|Metastatic|Normal|aTFC|C\\d|PTC',allScore$cancerType) & 
-                    !grepl('follicular|tallCell|Metastatic|Primary',allScore$cancerType) &
-                    !grepl('Primary',allScore$cancerType_details) &
+    dd = allScore[grepl('FFPE|Thyrocytes|Tumour|fTFC|fThy|metastatic|Normal|aTFC|C\\d|PTC',allScore$cancerType) & 
+                    #!grepl('follicular|tallCell|metastatic|primary',allScore$cancerType) &
+                    !grepl('follicular|tallCell',allScore$cancerType) &
+                    #!grepl('primary',allScore$cancerType_details) &
                     allScore$source %in% c('Sanger','TCGA_Thyroid',#'Yoo_2016',
-                                           'He_2021','Lee_2024') &
+                                           'He_2021','Lee_2024','REBC_THYR_paed','REBC_THYR_adult') &
                     allScore$moduleType %in% moduleType_toUse,]
                     #allScore$moduleType %in% c('fTFC1','fTFC2'),]
     
@@ -675,15 +707,30 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     }
     
     dd$normalised_score = dd$TotalScore - dd$med_normal
-    dd$source = factor(dd$source,c('Sanger','TCGA_Thyroid','He_2021','Lee_2024'))
+    dd$source = factor(dd$source,c('Sanger','REBC_THYR_paed','TCGA_Thyroid','He_2021','Lee_2024','REBC_THYR_adult'))
     
     table(dd$cancerNormal,dd$cancerNormal,dd$source)
     
+    # ## Remove REBC-THYR BRAF samples
+    # samples_to_remove = rebc_mdat$File.ID[grepl('BRAF',rebc_mdat$WGS_CandidateDriverFusion) | 
+    #                                         grepl('BRAF',rebc_mdat$WGS_CandidateDriverMutation)]
+    # dd = dd[!dd$sampleID %in% samples_to_remove,]
     
-    p1 = ggplot(dd[!dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],], aes(cancerNormal, normalised_score)) +
+    # dd$cancerType_details[grepl('REBC',dd$source)] = paste0(dd$cancerType_details[grepl('REBC',dd$source)],'::',rebc_mdat$WGS_CandidateDriverFusion[match(dd$sampleID[grepl('REBC',dd$source)],rebc_mdat$File.ID)])
+    # dd$cancerType_details[grepl('REBC',dd$source)] = paste0(dd$cancerType_details[grepl('REBC',dd$source)],'::',rebc_mdat$WGS_CandidateDriverMutation[match(dd$sampleID[grepl('REBC',dd$source)],rebc_mdat$File.ID)])
+    # dd$cancerType_details[grepl('REBC',dd$source) & !grepl('Normal::',dd$cancerType_details) & grepl('NCOA4-RET \\(RET-PTC3\\)',dd$cancerType_details)] = 'RET_PTC3'
+    # dd$cancerType_details[grepl('REBC',dd$source) & !grepl('Normal::',dd$cancerType_details) & grepl('\\(RET-PTC\\d+\\)',dd$cancerType_details)] = 'RET_PTC_others'
+    # dd$cancerType_details[grepl('REBC',dd$source) & !grepl('Normal::',dd$cancerType_details) & grepl('::::.*BRAF',dd$cancerType_details)] = 'BRAF_PTC'
+    # dd$cancerType_details[grepl('REBC',dd$source) & grepl('Normal::',dd$cancerType_details)] = 'Normal'
+    # dd$cancerType_details[grepl('REBC',dd$source) & grepl('PTC_Metastatic::',dd$cancerType_details)] = 'PTC_Metastatic::others'
+    # dd$cancerType_details[grepl('REBC',dd$source) & grepl('PTC_Primary::',dd$cancerType_details)] = 'PTC_Primary::others'
+    
+    
+    #[!dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],]
+    p1 = ggplot(dd, aes(cancerNormal, TotalScore)) +
       geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
-      geom_quasirandom(size=0.4,width = 0.15,alpha=0.4)+
-      geom_boxplot(aes(fill=cancerNormal),outlier.colour = 'white',position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
+      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
+      geom_boxplot(aes(fill=cancerNormal),outlier.shape = NA,position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
       #geom_point(data=dd[dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],],col='red',size=2)+
       scale_fill_manual(values =c('Normal'=grey(0.8),'Normal.adj'=grey(0.4),'Tumour'='#511378'))+
       #scale_fill_manual(values =c(col25,pal34H))+
@@ -706,13 +753,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
   }
   
   saveFig(file.path(plotDir,'Fig4c_fTFC1.2_moduleScore_bulkSamples_sub'),plotFun_fTFC_moduleScore,rawData=allScore,width = 6,height = 7,res = 500)
-  
 }
-
-
-
-
-
 
 
 
@@ -864,8 +905,6 @@ fig4b_heatmap_bulkRNA = function(){
     print(hm)
   }
   saveFig(file.path(plotDir,'Fig4b_heatmap_fThy.markers_bRNA_v2'),plotFun_bRNA.only_v2,rawData=cpmCnt.sub,width = 9,height = 9,res = 500)  
-  
-  
 }
 
 

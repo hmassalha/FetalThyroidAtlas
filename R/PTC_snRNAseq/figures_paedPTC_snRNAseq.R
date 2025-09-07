@@ -215,7 +215,9 @@ suppfig_x_pPTC_immune_composition = function(){
 #####------------------------------------------------------------------------------------------
 markers = c(
   "TSHR", "NKX2-1", "PAX8", "GLIS3", "TG","SLC26A4","IYD", "HHEX", "FOXE1", "DUOXA1", "DUOXA2", "DUOX1","DUOX2", "SLC5A5", "ZNF804B", 
+  # Down-reg in tumour
   "TPO", "COL23A1", "PPARGC1A", "SLC5A8", "DIO2", "TFF3", 
+  # up-reg in tumour
   "LRRK2", "HMGA2", "LMO3", "MET", "VAV3", "FN1", "LGALS3", "SERPINA1",  
   # Endothelium
   "FLT1", "PLVAP", "MECOM", "VWF","ANO2", "SLCO2A1", "CDH5", "ECSCR", "TBX1", "FLT4", "PROX1", 
@@ -230,26 +232,37 @@ markers = c(
 # SuppFigure X: Dot Plot of canonical markers
 suppfig_x_pPTC_celltype_dotplot = function(){
   srat = readRDS(srat_fp)
+  srat$donor[srat$donor == 'Y46'] = 'P2'
+  srat$donor[srat$donor == 'Y24'] = 'P1'
   srat$annot[srat$annot == 'Tumour' & srat$etiology == 'Met'] = 'Tumour (Met.)'
   srat$annot[srat$annot == 'Thyrocytes'] = paste0('Thyrocytes_',srat$donor[srat$annot == 'Thyrocytes'])
+  srat$annot[grepl('Tumour',srat$annot)] = paste0(srat$annot[grepl('Tumour',srat$annot)],'_',srat$donor[grepl('Tumour',srat$annot)])
   
-  
-  p = DotPlot()
-}
-plotFun_aThy_LRv1.fThy_frac.Cell = function(noFrame=FALSE,noPlot=FALSE){
-  par(mar=c(0.1,0.1,1,0.1))
-  p1 = ggplot(dd,aes(x=frac,y=dataset,fill=cell_assignment))+
-    geom_col(width = 0.75) +
-    scale_x_continuous(breaks = c(0,0.5,1),labels = c(0,0.5,1))+
-    scale_fill_manual(values = c('TFC2'='#64b9c6','ambiguous'=grey(0.8),'TFC1'='#356f87'))+
-    theme_classic() + 
-    theme(#panel.border = element_rect(fill = F,colour = 'black',linewidth = 1),
-      axis.line = element_blank(),
-      strip.background = element_blank(),
-      axis.text = element_text(colour='black'),
-      axis.ticks = element_blank())+xlab('') + ylab('')
-  
-  print(p1)
+  srat$annot = factor(srat$annot,
+                      c('Tumour_P1','Tumour_P2','Tumour (Met.)_P2','Thyrocytes_P1','Thyrocytes_P2',
+                        'VECs','LECs','Mesenchymal','Fibroblasts','SMCs',
+                        'B_cells','Plasma_cells','T_cells','DC1','Monocytes','Mast_cells',
+                        'doublets',  'lowQual',  'unknown'))
+  Idents(srat) = srat$annot
+  plotFun_pPTC_dotplot = function(noFrame=FALSE,noPlot=FALSE){
+    p = DotPlot(srat,idents = unique(Idents(srat)[!Idents(srat) %in% c('doublets',  'lowQual',  'unknown')]),
+                group.by = 'annot',
+                cols = c(colAlpha(grey(0.95),0.8),'black'),
+                features = markers) + 
+      coord_flip() + RotatedAxis()+
+      theme(axis.text.x = element_text(size=10,vjust = 0.5,hjust = 1,angle = 90),
+            axis.text.y = element_text(size=8,face = "italic"),
+            legend.position = 'left',
+            legend.text = element_text(size = 8),
+            legend.title = element_text(size = 9),
+            legend.key.size = unit(0.4, "cm")
+            )+xlab('')+ylab('')
+      
+    print(p)
+  }
+  saveFig(file.path(plotDir,'FigXX_pPTC_snRNAseq_dotplot'),plotFun_pPTC_dotplot,width = 5,height = 10,res = 500)  
 }
 
-saveFig(file.path(plotDir,'Fig2_aThy_LRv1.fThy_fracCell'),plotFun_aThy_LRv1.fThy_frac.Cell,rawData=dd,width = 4.5,height = 2.8,res = 500)  
+  
+
+

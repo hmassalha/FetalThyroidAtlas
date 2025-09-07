@@ -115,19 +115,25 @@ dd$celltype = factor(dd$celltype,gsub('imm_','',c("imm_PreB_cells","imm_B_cells"
                                    "imm_Mast_cells",
                                    'imm_PDC/DC1',"imm_DC2",
                                    "imm_Monocytes","imm_Macrophages")))
+plotFun_T21vs2n_immune_composition = function(noFrame=FALSE,noPlot=FALSE){
+  library(ggbeeswarm)
+  p = ggplot(dd,aes(x=karyotype,y=frac))+
+    geom_boxplot(outlier.shape=NA,aes(fill=karyotype),alpha=1,colour='black',linewidth=0.4)+
+    geom_quasirandom(size=0.9,width = 0.3)+
+    facet_grid(age_group~cluster+celltype,space='free',scales='free')+
+    theme_classic(base_size = 13)+
+    theme(panel.border = element_rect(fill=NA,color='black'),
+          axis.line = element_blank(),strip.background = element_blank(),
+          axis.text = element_text(color='black'),axis.ticks = element_line(color='black'),
+          panel.grid.major = element_line())+
+    xlab('Karyotype') + ylab('Fraction of all immune cells per donor')+
+    scale_fill_manual(values = c('T21'='#849978','2n'='#7e5f97'))
+  
+  print(p)
+}
 
-library(ggbeeswarm)
-ggplot(dd,aes(x=karyotype,y=frac))+
-  geom_boxplot(outlier.shape=NA,aes(fill=karyotype))+
-  geom_quasirandom(size=1)+
-  facet_grid(age_group~cluster+celltype,space='free',scales='free')+
-  theme_classic(base_size = 13)+
-  theme(panel.border = element_rect(fill=NA,color='black'),
-        axis.line = element_blank(),strip.background = element_blank(),
-        axis.text = element_text(color='black'),axis.ticks = element_line(color='black'),
-        panel.grid.major = element_line())+
-  xlab('Karyotype') + ylab('Fraction of all immune cells per donor')+
-  scale_fill_manual(values = c('T21'='#849978','2n'='#7e5f97'))
+saveFig(file.path(plotDir,'FigX_T21vs2n_immune_composition'),plotFun_T21vs2n_immune_composition,rawData=dd,width = 10,height = 4.5,res = 500)
+
   
 ggpubr::stat_compare_means(
     aes(group = karyotype),

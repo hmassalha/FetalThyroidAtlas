@@ -149,6 +149,7 @@ for(dataset in dataset_toProcess){
     cells = thyroid.combined$cellID[thyroid.combined$cellID %in% wang22_scanpy_obs$X &
                                       thyroid.combined$orig.ident == 'Thyroid_L4']
     wang22_thyrocytes = subset(thyroid.combined, cellID %in% cells)
+    wang22_thyrocytes = subset(wang22_thyrocytes, subset = orig.ident == 'Thyroid_L4')
     wang22_thyrocytes = standard_clustering(wang22_thyrocytes)
     
     ## Add umap from scanpy object
@@ -220,6 +221,7 @@ for(dataset in dataset_toProcess){
     ## Subset to just cells from scanpy object
     hong23_mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Hong_2023/Hong_2023_obs.csv.gz')
     table(gsub('-','.',hong23_mdat$Index) %in% srat$cellID)
+    table(srat$cellID %in% gsub('-','.',hong23_mdat$Index))
     srat = subset(srat,subset = cellID %in% gsub('-','.',hong23_mdat$Index))
     umap = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Hong_2023/Hong_2023_UMAP.csv.gz',row.names = 1)
     rownames(umap) = gsub('-','.',rownames(umap))
@@ -267,8 +269,27 @@ for(dataset in dataset_toProcess){
     saveRDS(srat,output_objects[dataset])
     
   }else if(dataset == 'Han20'){
-    # As this dataset did not published annotation, please run R/fetal_thyrocytes_2n/02.0_annotate_Peng21.R
-    message('Please run R/fetal_thyrocytes_2n/02.0_annotate_Peng21.R')
+    mtx = Matrix::readMM('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Han_2020/matrix.mtx.gz')
+    bc = read.delim('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Han_2020/barcodes.tsv.gz',sep = '\t',header = F)
+    colnames(mtx) = bc$V1
+    features = read.delim('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Han_2020/features.tsv.gz',sep = '\t',header = F)
+    rownames(mtx) = features$V1
+    
+    han20 = CreateSeuratObject(mtx)
+    mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Han_2020/Han_2020_obs.csv.gz')
+    checkmate::assert_true(all(colnames(han20) %in% mdat$index))
+    han20@meta.data = cbind(han20@meta.data,mdat[match(rownames(han20@meta.data),mdat$index),!colnames(mdat) %in% colnames(han20@meta.data)])
+    han20 = standard_clustering(han20)
+    
+    umap = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Han_2020/Han_2020_UMAP.csv.gz',row.names = 1)
+    checkmate::assert_true(all(colnames(han20) %in% rownames(umap)))
+    han20@reductions$umap@cell.embeddings = as.matrix(umap[match(colnames(han20),rownames(umap)),])
+    han20$cellID = rownames(han20@meta.data)
+    
+    DimPlot(han20)
+    mdat = cbind(han20@meta.data,as.data.frame(han20@reductions$umap@cell.embeddings))
+    write.csv(mdat,gsub('.RDS','_mdat.csv',output_objects[dataset]))
+    saveRDS(han20,output_objects[dataset])
   }
 }
 
