@@ -707,9 +707,18 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     }
     
     dd$normalised_score = dd$TotalScore - dd$med_normal
-    dd$source = factor(dd$source,c('Sanger','REBC_THYR_paed','TCGA_Thyroid','He_2021','Lee_2024','REBC_THYR_adult'))
+    dd$source = factor(dd$source,c('Sanger','TCGA_Thyroid','He_2021','Lee_2024','REBC_THYR_paed', 'REBC_THYR_adult'))
     
     table(dd$cancerNormal,dd$cancerNormal,dd$source)
+    
+    dd$cancerType[dd$source %in% c('REBC_THYR_paed','REBC_THYR_adult') & 
+                      dd$cancerNormal != 'Normal' & 
+                      dd$sampleID %in% rebc_mdat$File.ID[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion)]] = paste0(dd$cancerType[dd$source %in% c('REBC_THYR_paed','REBC_THYR_adult') & 
+                                                                                                                                     dd$cancerNormal != 'Normal' & 
+                                                                                                                                     dd$sampleID %in% rebc_mdat$File.ID[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion)]],'_RET')
+    
+    dd$cancerType[grepl('RET',dd$cancerType)] = 'RET'
+    dd$cancerType[!grepl('RET',dd$cancerType)] = dd$cancerNormal[!grepl('RET',dd$cancerType)]
     
     # ## Remove REBC-THYR BRAF samples
     # samples_to_remove = rebc_mdat$File.ID[grepl('BRAF',rebc_mdat$WGS_CandidateDriverFusion) | 
@@ -727,10 +736,11 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
     
     #[!dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],]
-    p1 = ggplot(dd, aes(cancerNormal, TotalScore)) +
+    p1 = ggplot(dd, aes(cancerNormal, normalised_score)) +
       geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
-      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
+      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6,aes(col=cancerType))+
       geom_boxplot(aes(fill=cancerNormal),outlier.shape = NA,position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
+      #geom_point(data=dd[dd$cancerType == 'RET',],size=4)+
       #geom_point(data=dd[dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],],col='red',size=2)+
       scale_fill_manual(values =c('Normal'=grey(0.8),'Normal.adj'=grey(0.4),'Tumour'='#511378'))+
       #scale_fill_manual(values =c(col25,pal34H))+

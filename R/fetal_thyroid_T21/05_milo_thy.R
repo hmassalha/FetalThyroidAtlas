@@ -80,7 +80,7 @@ differential_abundance_testing = function(srat,reduced_dims = 'PCA',k = 50, d = 
   srat.milo <- calcNhoodDistance(srat.milo, d=d, reduced.dim = reduced_dims)
   
   # Testing
-  da_results <- testNhoods(srat.milo, design = as.formula(design_formula), design.df = da_design,reduced.dim = reduced_dims,...)
+  da_results <- testNhoods(srat.milo, design = as.formula(design_formula), design.df = da_design,reduced.dim = reduced_dims)
   
   # Annotate the neighbourhoods
   da_results <- annotateNhoods(srat.milo, da_results, coldata_col = annot_col)

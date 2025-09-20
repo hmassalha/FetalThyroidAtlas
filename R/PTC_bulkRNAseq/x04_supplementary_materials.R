@@ -98,7 +98,7 @@ for(i in names(bulk_sources)){
   
   if(i == 'Lee2024'){
     mdat = mdat %>% 
-      dplyr::filter(cell.subtype.ch1 %in% c('Normal','PTC')) %>% 
+      dplyr::filter(cell.type.ch1 %in% c('Normal','PTC')) %>% 
       dplyr::mutate(sample_id = paste0(sampleID,' (',title,')'),
                     donor_id = gsub('-N.*|N.*|-T.*|T.*','',title),
                     age_category = 'adult',
