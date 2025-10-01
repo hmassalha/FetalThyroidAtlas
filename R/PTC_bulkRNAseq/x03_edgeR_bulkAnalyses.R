@@ -4,7 +4,7 @@
 ## due to batch effects across dataset, cannot compare adult PTC vs paediatric PTC directly
 
 
-outDir = '~/lustre_mt22/Thyroid/Results_v2/10_bulkEdgeR_thyrocytes_foetal_vs_paed/oct24'
+outDir = '~/FetalThyroidAtlas/Results/2505/PTC_bulkRNAseq/DEG_tumour_vs_normal'
 if(!dir.exists(outDir)){
   dir.create(outDir,recursive = T)
 }
@@ -21,9 +21,9 @@ library(GenomicFeatures)
 library(tidyverse)
 library(edgeR)
 
-source("~/lustre_mt22/generalScripts/utils/misc.R")
-source("~/lustre_mt22/generalScripts/utils/sc_utils.R")
-source("~/lustre_mt22/generalScripts/utils/pseudobulk.R")
+source("~/FetalThyroidAtlas/R/utils/misc.R")
+source("~/FetalThyroidAtlas/R/utils/sc_utils.R")
+source("~/FetalThyroidAtlas/R/helperFunctions.R")
 
 
 
@@ -33,21 +33,25 @@ source("~/lustre_mt22/generalScripts/utils/pseudobulk.R")
 tgtChrs = paste0('chr',c(1:22))
 
 #Define genomic coordinates
-gtf = '/nfs/srpipe_references/downloaded_from_10X/refdata-gex-GRCh38-2020-A/genes/genes.gtf'
-txdb = makeTxDbFromGFF(gtf)
-gns = genes(txdb)
-
-geneMap = read.delim('/lustre/scratch126/cellgen/team292/hm11/with_Mi/T21_Oct24/HCA_GLNDrna14662854/output/GeneFull/filtered/features.tsv.gz',header = F,sep = '\t')
-colnames(geneMap) = c('ensID','geneSym','GEX')
-geneMap$geneSym[duplicated(geneMap$geneSym)] = paste0(geneMap$geneSym[duplicated(geneMap$geneSym)],'.1')
-geneMap$geneSym = gsub('_','-',geneMap$geneSym)
-geneMap$chr = as.character(seqnames(gns[match(geneMap$ensID,gns$gene_id)]))
-
-bioMart_annot = read.csv('~/lustre_mt22/generalResources/GRCh38_2020A_geneAnnotation.csv')
-geneMap = cbind(geneMap,bioMart_annot[match(geneMap$ensID,bioMart_annot$ensID),!colnames(bioMart_annot) %in% c('X',colnames(geneMap))])
-
-
-
+geneMap_fp = '~/FetalThyroidAtlas/Results/geneMap.csv'
+if(!file.exists(geneMap_fp)){
+  gtf = '/nfs/srpipe_references/downloaded_from_10X/refdata-gex-GRCh38-2020-A/genes/genes.gtf'
+  txdb = makeTxDbFromGFF(gtf)
+  gns = genes(txdb)
+  
+  geneMap = read.delim('/lustre/scratch126/cellgen/team292/hm11/with_Mi/T21_Oct24/HCA_GLNDrna14662854/output/GeneFull/filtered/features.tsv.gz',header = F,sep = '\t')
+  colnames(geneMap) = c('ensID','geneSym','GEX')
+  geneMap$geneSym[duplicated(geneMap$geneSym)] = paste0(geneMap$geneSym[duplicated(geneMap$geneSym)],'.1')
+  geneMap$geneSym = gsub('_','-',geneMap$geneSym)
+  geneMap$chr = as.character(seqnames(gns[match(geneMap$ensID,gns$gene_id)]))
+  
+  bioMart_annot = read.csv('~/lustre_mt22/generalResources/GRCh38_2020A_geneAnnotation.csv')
+  geneMap = cbind(geneMap,bioMart_annot[match(geneMap$ensID,bioMart_annot$ensID),!colnames(bioMart_annot) %in% c('X',colnames(geneMap))])
+  
+}else{
+  geneMap = read.csv(geneMap_fp,row.names = 1) %>% 
+    dplyr::mutate(ensID = gene_id, geneSym = gene_name, gene_biotype = gene_type)
+}
 
 
 
@@ -116,7 +120,7 @@ fit_model <- function(pb,colDat,formula,geneMap,groupID='group',MDS_groups = c('
   cluster<-as.factor(colDat[[groupID]][match(rownames(y$samples),colDat[[pb_groupID]])])
   df = plotMDS(y, pch=16,col=c(col25,pal34H)[cluster], main="MDS") 
   df = data.frame(x = df$x,y=df$y,pb_groupID = names(df$x))
-  df = cbind(df,colDat[match(df$pb_groupID,colDat[[pb_groupID]]),!colnames(colDat) %in% colnames(df)])
+  df = cbind(df[,c(1:3)],colDat[match(df$pb_groupID,colDat[[pb_groupID]]),!colnames(colDat) %in% colnames(df)])
   for(f in MDS_groups){
     df$group = df[[f]]
     p = ggplot(df,aes(x,y,col=group))  +
@@ -191,16 +195,26 @@ plot_logCPM_byGroup = function(y,genes,geneMap,group='cancerType'){
 ##  Import datasetes  ####
 ##----------------------##
 
+library(TCGAbiolinks)
+
+query <- TCGAbiolinks::GDCquery(project = "TCGA-THCA", 
+                  data.category = "Simple Nucleotide Variation", 
+                  data.type = "Masked Somatic Mutation")
+TCGAbiolinks::GDCdownload(query)
+maf <- TCGAbiolinks::GDCprepare(query)
+
 ##---- adult TCGA bulk RNAseq
-tcga_sce_path = '~/lustre_mt22/Thyroid/Data/TCGA_Thyroid/TCGA_Thyroid_gdc0923_sce.RDS'
+tcga_sce_path = '~/FetalThyroidAtlas/Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS'
 tcga_sce = readRDS(tcga_sce_path)
-tcga_rawCnt = assays(tcga_sce)[['counts_raw']]
-tcga_mdat = as.data.frame(colData(tcga_sce))
-tcga_mdat = tcga_mdat[match(colnames(tcga_rawCnt),tcga_mdat$sampleID),]
-tcga_mdat$cancerType[tcga_mdat$cancerType == 'Classical/usual' & tcga_mdat$driver_classification == 'RET_fusion'] = 'RET_fusion_Classical'
+tcga_rawCnt = assays(tcga_sce)[['unstranded']]
+tcga_mdat = as.data.frame(colData(tcga_sce)) %>% dplyr::mutate(sampleID = barcode,cancerType=tissue_type)
+#tcga_mdat = tcga_mdat[match(colnames(tcga_rawCnt),tcga_mdat$sampleID),]
+#tcga_mdat$cancerType[tcga_mdat$cancerType == 'Classical/usual' & tcga_mdat$driver_classification == 'RET_fusion'] = 'RET_fusion_Classical'
+tcga_mdat = tcga_mdat[tcga_mdat$tissue_type == 'Normal' | (!is.na(tcga_mdat$paper_fusionDriverGenes) & grepl('RET',tcga_mdat$paper_fusionDriverGenes)),]
+
 
 # Determine sex
-tpm_sex = assays(tcga_sce)[['counts_tpm']][geneMap$ensID[geneMap$geneSym %in% c('XIST','RPS4Y1')],tcga_mdat$sampleID]
+tpm_sex = assays(tcga_sce)[['tpm_unstranded']][geneMap$ensID[geneMap$geneSym %in% c('XIST','RPS4Y1')],tcga_mdat$sampleID]
 rownames(tpm_sex) = geneMap$geneSym[match(rownames(tpm_sex),geneMap$ensID)]
 sex = apply(tpm_sex,2,function(s){
   names(s)=rownames(tpm_sex)
@@ -217,12 +231,25 @@ table(tcga_mdat$sex,tcga_mdat$gender)
 
 
 ##---- paediatric bulk RNAseq
-sce_path = '~/lustre_mt22/Thyroid/Data/inhouse_bulkRNA_thyroid/inhouse_bulkRNA_thyroid_2410_sce.RDS'
+sce_path = '~/FetalThyroidAtlas/Data/inhouse_bulk/inhouse_bulkRNA_fetalThyroid_paedPTC.RDS'
 inhouse_sce = readRDS(sce_path)
 inhouse_rawCnt = assays(inhouse_sce)[['counts_raw']]
 inhouse_mdat = as.data.frame(colData(inhouse_sce))
 inhouse_mdat = inhouse_mdat[match(colnames(inhouse_rawCnt),inhouse_mdat$sampleID),]
+# Determine sex
+tpm_sex = assays(inhouse_sce)[['counts_tpm']][geneMap$ensID[geneMap$geneSym %in% c('XIST','RPS4Y1')],]
+rownames(tpm_sex) = geneMap$geneSym[match(rownames(tpm_sex),geneMap$ensID)]
+sex = apply(tpm_sex,2,function(s){
+  names(s)=rownames(tpm_sex)
+  if(s['XIST'] > s['RPS4Y1']){
+    return('F')
+  }else{
+    return('M')
+  }
+})
+inhouse_mdat$sex = sex[match(inhouse_mdat$sampleID,names(sex))]
 
+table(inhouse_mdat$sex)
 
 ##---- FThyrocytes - scRNAseq
 fThy = readRDS('/lustre/scratch125/casm/team274sb/mt22/Thyroid/Data/fetalThyroid/fThyrocytes_2n_jul23.RDS')
@@ -231,6 +258,13 @@ fThy$annot[fThy$annot == 'thy_Lumen-forming'] = 'TFC2'
 fThy$annot[fThy$annot == 'thy_TH_processing'] = 'TFC1'
 
 
+##---- REBC-THYR (Morton etal 2021) - validation cohort
+rebc_fp = '~/FetalThyroidAtlas/Data/published_bulkRNAseq/REBC-THYR/REBC_THYR_2508.RData'
+rebc_se = readRDS(rebc_fp)
+rebc_rawCnt = assays(rebc_se)[['unstranded']]
+rebc_mdat = as.data.frame(colData(rebc_se))
+rebc_mdat = rebc_mdat[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion),]
+
 
 ##--------------------------------------------------------##
 ##  ADULT - bulkRNAseq DEG between TCGA normal and PTC  ####
@@ -238,7 +272,7 @@ fThy$annot[fThy$annot == 'thy_TH_processing'] = 'TFC1'
 
 ##---- Import bulk RNAseq data
 # subset to just normal and RET-fusion PTC samples
-tcga_mdat = tcga_mdat[tcga_mdat$cancerType %in% c('Normal','CCDC6_RET:Classical/usual','RET_fusion_Classical'),]
+#tcga_mdat = tcga_mdat[tcga_mdat$cancerType %in% c('Normal','CCDC6_RET:Classical/usual','RET_fusion_Classical'),]
 tcga_rawCnt = tcga_rawCnt[rownames(tcga_rawCnt) %in% geneMap$ensID[!is.na(geneMap$gene_biotype) & geneMap$gene_biotype %in% c('protein_coding')],
                           tcga_mdat$sampleID]
 
@@ -522,6 +556,104 @@ saveFig(file.path(plotDir,'Fig4e_adultPTC.unique_moduleScore_in.scFThy.Samples')
 
 
 
+##--------------------------------##
+##    Validation in REBC-THYR   ####
+##--------------------------------##
+source('~/FetalThyroidAtlas/R/helperFunctions.R')
+
+gene_modules = read.csv('~/FetalThyroidAtlas/SupplementaryTables/TableS8_adult.PTCvsNormal_imprints_in_paed.PTCvsNormal.csv',row.names = 1)
+gene_modules$ensID = geneMap$ensID[match(gene_modules$gene_symbol..adult.PTC.vs.normal.,geneMap$gene_name)]
+moduleList = list(aPTC_up = gene_modules$ensID[gene_modules$direction..adult.PTC.vs.normal. == 'upregulated_in_adultPTC'],
+                   aPTC_down = gene_modules$ensID[gene_modules$direction..adult.PTC.vs.normal. == 'downregulated_in_adultPTC'],
+                   pPTC_up = gene_modules$ensembl_ID..paed.PTC.vs.normal.[!is.na(gene_modules$direction..paed.PTC.vs.normal.) & gene_modules$direction..paed.PTC.vs.normal. == 'upregulated_in_paed.PTC'],
+                   pPTC_down = gene_modules$ensembl_ID..paed.PTC.vs.normal.[!is.na(gene_modules$direction..paed.PTC.vs.normal.) & gene_modules$direction..paed.PTC.vs.normal. == 'downregulated_in_paed.PTC'])
+moduleList[['adult_up_only']] = moduleList[['aPTC_up']][!moduleList[['aPTC_up']] %in% moduleList[['pPTC_up']]]
+moduleList[['adult_down_only']] = moduleList[['aPTC_down']][!moduleList[['aPTC_down']] %in% moduleList[['pPTC_down']]]
+
+##--- import bulk counts and calculate cpmCnt in xx01_moduleScoring.R
+bulkRNA = import_bulkRNA_thyroid(bulk_sources = c('inhouse'='~/FetalThyroidAtlas/Data/inhouse_bulk/inhouse_bulkRNA_fetalThyroid_paedPTC.RDS',
+                                                  'TCGA_Thyroid'='~/FetalThyroidAtlas/Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS',
+                                                  'REBC_THYR' = '~/FetalThyroidAtlas/Data/published_bulkRNAseq/REBC-THYR/REBC_THYR_2508.RData',
+                                                  'He2021'='~/FetalThyroidAtlas/Data/published_bulkRNAseq/He_etal_21/aPTC_He_2021_se.RDS',
+                                                  'Lee2024' = '~/FetalThyroidAtlas/Data/published_bulkRNAseq/Lee_etal_24/aPTC_Lee_2024_se.RDS'),
+                                 gene_map = gene_map)
+bulk_samples = bulkRNA[['bulk_samples']]
+rownames(bulk_samples) = bulk_samples$sampleID
+cpmCnt = bulkRNA[['cpmCnt']]
+tpmCnt = bulkRNA[['tpm_count']]
+rawCnt = bulkRNA[['raw_count']]
+
+##---  Score the modules -----##
+rebc_se = readRDS('~/FetalThyroidAtlas/Data/published_bulkRNAseq/REBC-THYR/REBC_THYR_2508.RData')
+rebc_mdat = colData(rebc_se)
+tpmCnt = assays(rebc_se)[['tpm_unstranded']]
+colnames(tpmCnt) = colData(rebc_se)[['File.ID']]
+table(rownames(tpmCnt) %in% gene_modules$ensID[gene_modules$direction..adult.PTC.vs.normal. != 'not_DE'])
+table(gene_modules$ensID[gene_modules$direction..adult.PTC.vs.normal. != 'not_DE'] %in% rownames(tpmCnt))
+
+mtx = tpmCnt[,!colnames(tpmCnt) %in% c('ensID','geneLength')]
+# apply the rankGenes method
+bulk_ranked = rankGenes(mtx)
 
 
+# apply the scoring function
+allScore = data.frame()
+for(i in 1:length(moduleList)){
+  if(length(moduleList[[i]]) == 2){
+    moduleScores = simpleScore(bulk_ranked,
+                               upSet = moduleList[[i]][['up']],
+                               downSet = moduleList[[i]][['down']])
+    moduleScores = moduleScores[,c('TotalScore', 'TotalDispersion')]
+  }else{
+    moduleScores = simpleScore(bulk_ranked,upSet = moduleList[[i]])
+  }
+  
+  # create a dataframe with the data required: scores and sample group
+  scoredf = merge(bulk_samples,moduleScores,by.x=0,by.y=0)
+  scoredf$moduleType = paste0(names(moduleList)[i])
+  
+  ## Add to allScore
+  allScore = rbind(allScore,scoredf)
+}
+
+
+table(allScore$moduleType)
+write.csv(allScore,file.path(outDir,'fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv'))
+allScore = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv'))
+
+allScore$cancerType[allScore$source2 %in% c('REBC_THYR_paed','REBC_THYR_adult') & 
+                      allScore$cancerType != 'Normal' & 
+                      allScore$sampleID %in% rebc_mdat$File.ID[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion)]] = paste0(allScore$cancerType[allScore$source2 %in% c('REBC_THYR_paed','REBC_THYR_adult') & 
+                                                                                                                                                 allScore$cancerType != 'Normal' & 
+                                                                                                                                                 allScore$sampleID %in% rebc_mdat$File.ID[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion)]],'_RET')
+allScore$others = rebc_mdat$DriverGroup_CoMutFig[match(allScore$sampleID,rebc_mdat$File.ID)]
+
+library(ggbeeswarm)
+ggplot(allScore,aes(cancerType,TotalScore))+
+  geom_boxplot(outlier.shape = NA,aes(fill=cancerType))+
+  geom_quasirandom(aes(col=others),width = 0.3,size=0.1,alpha=1)+
+  facet_grid(moduleType ~ source2,scales = 'free',space = 'free')+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=90,vjust = 0.5,hjust = 1))
+
+rebc_mdat$WGS_CandidateDriverFusion
+
+allScore_sub = allScore[allScore$cancerType == 'Normal',]
+allScore_sub = merge(allScore_sub,rebc_mdat,by.x='Row.names',by.y='File.ID')
+allScore_sub = allScore_sub[allScore_sub$moduleType == 'aPTC_up',]
+libsize = colSums(assays(rebc_se)[['unstranded']])
+names(libsize) = colData(rebc_se)[['File.ID']]
+allScore_sub$libSize = libsize[match(allScore_sub$sampleID,names(libsize))]
+pdf('~/rebc_test.pdf')
+for (i in 2:ncol(allScore_sub)) {
+  p <- ggplot(allScore_sub, aes(x = TotalScore, y = libSize)) +
+    geom_point(aes(col = allScore_sub[[i]])) +
+    scale_y_log10() +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(col = colnames(allScore_sub)[i])  # label legend with column name
+  
+  print(p)   # needed inside a loop to display plots
+}
+dev.off()
 

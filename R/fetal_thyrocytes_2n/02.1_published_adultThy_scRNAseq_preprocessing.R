@@ -6,6 +6,7 @@
     # 4. Hong et al 2023 (adult normal)
     # 6. Lu et al 2023 (adult normal + PTC)
     # 7. Peng et al 2020 (adult normal + PTC)
+    # 8. Zheng et al 2025 (adult matched-paratumour + PTC) - 2 individuals both with BRAF mutations
 
 ##----------------##
 ##   Libraries  ####
@@ -16,15 +17,19 @@ library(tidyverse)
 source("R/utils/sc_basicQC.R")
 
 
-dataset = c('Wang22','Pu21','Hong23','Lu23','Mosteiro23','Peng21')
+dataset = c('Wang22','Pu21','Hong23','Lu23','Mosteiro23','Peng21','Zheng25')
 output_objects = c('Wang22'='Data/published_scRNAseq/Wang_etal_2022/Wang_etal_2022.RDS',
                    'Pu21'='Data/published_scRNAseq/Pu_etal_2021/Pu_etal_2021.RDS',
                    'Hong23'='Data/published_scRNAseq/Hong_etal_2023/Hong_etal_2023.RDS',
                    'Mosteiro23'='Data/published_scRNAseq/Mosteiro_etal_2023/Mosteiro_etal_2023.RDS',
                    'Lu23' = 'Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023.RDS',
-                   'Peng21'='Data/published_scRNAseq/Peng_etal_2021/Peng_etal_2021.RDS')
+                   'Peng21'='Data/published_scRNAseq/Peng_etal_2021/Peng_etal_2021.RDS',
+                   'Zheng25'='Data/published_scRNAseq/Zheng_etal_2025/Zheng_etal_2025.RDS')
 dataset_toProcess = names(output_objects[!file.exists(output_objects)])
 for(dataset in dataset_toProcess){
+  if(dataset == 'Zheng25'){
+    message('Please run R/fetal_thyrocytes_2n/02.0_process_Zheng25.R')
+  }
   if(dataset=='Mosteiro23'){
     dataDir = '/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Mosteiro_2023/mtx/'
     if(!dir.exists(dataDir)){

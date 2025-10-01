@@ -1,11 +1,11 @@
 ## Perform pseudobulk DE analysis on scRNAseq diploid thyrocytes (from 27 foetuses), using edgeR
-## to compare fTFC1 vs fTFC2 ##
+## to compare fTS1 vs fTS2 ##
 
-outDir = '~/lustre_mt22/Thyroid/Results_v2/2.1_DEG_2n_fTFC1.vs.fTFC2/oct24'
-if(!dir.exists(outDir)){
-  dir.create(outDir,recursive = T)
+main_outdir = '~/FetalThyroidAtlas/Results/2505/DEG_2n_fTS1.vs.fTS2/'
+if(!dir.exists(main_outdir)){
+  dir.create(main_outdir,recursive = T)
 }
-setwd(outDir)
+setwd(main_outdir)
 
 
 
@@ -17,9 +17,11 @@ library(Seurat)
 library(GenomicFeatures)
 library(RColorBrewer)
 library(edgeR)
+library(limma)
 
-source("~/lustre_mt22/generalScripts/utils/misc.R")
-source("~/lustre_mt22/generalScripts/utils/sc_utils.R")
+source("~/FetalThyroidAtlas/R/utils/misc.R")
+source("~/FetalThyroidAtlas/R/utils/04_pbEdgeR_helperFunctions.R")
+source("~/FetalThyroidAtlas/R/utils/sc_utils.R")
 #source("~/lustre_mt22/generalScripts/utils/pseudobulk.R")
 
 
@@ -27,7 +29,7 @@ source("~/lustre_mt22/generalScripts/utils/sc_utils.R")
 ##-----------------------##
 ##        Params          #
 ##-----------------------##
-plotDir = outDir
+plotDir = main_outdir
 keepCylcingCells=F
 tgtChrs = paste0('chr',c(1:22))
 
@@ -36,19 +38,13 @@ gtf = '/nfs/srpipe_references/downloaded_from_10X/refdata-gex-GRCh38-2020-A/gene
 txdb = makeTxDbFromGFF(gtf)
 gns = genes(txdb)
 
-geneMap = read.delim('/lustre/scratch126/cellgen/team292/hm11/with_Mi/T21_Oct24/HCA_GLNDrna14662854/output/GeneFull/filtered/features.tsv.gz',header = F,sep = '\t')
-colnames(geneMap) = c('ensID','geneSym','GEX')
-geneMap$geneSym[duplicated(geneMap$geneSym)] = paste0(geneMap$geneSym[duplicated(geneMap$geneSym)],'.1')
-geneMap$geneSym = gsub('_','-',geneMap$geneSym)
-geneMap$chr = as.character(seqnames(gns[match(geneMap$ensID,gns$gene_id)]))
-
-bioMart_annot = read.csv('~/lustre_mt22/generalResources/GRCh38_2020A_geneAnnotation.csv')
-geneMap = cbind(geneMap,bioMart_annot[match(geneMap$ensID,bioMart_annot$ensID),!colnames(bioMart_annot) %in% c('X',colnames(geneMap))])
-geneMap = read.csv('~/FetalThyroidAtlas/Results/geneMap.csv')
-geneMap$gene_biotype = geneMap$gene_type
+geneMap = read.csv('~/FetalThyroidAtlas/Results/geneMap.csv',row.names = 1)
 geneMap$geneSym = geneMap$gene_name
 geneMap$ensID = geneMap$gene_id
 geneMap$chr = geneMap$seqnames
+geneMap$gene_biotype = geneMap$gene_type
+geneMap = geneMap[geneMap$gene_id %in% names(gns),]
+
 
 fit_model <- function(pb,colDat,formula,geneMap,groupID='group',MDS_groups = c('Genotype','donorID','sex'),pb_groupID='donorID',coef=NULL,mycontrast=NULL){
   
@@ -96,7 +92,7 @@ fit_model <- function(pb,colDat,formula,geneMap,groupID='group',MDS_groups = c('
   y <- calcNormFactors(y)
   # MDS plot
   cluster<-as.factor(colDat[[groupID]][match(rownames(y$samples),colDat[[pb_groupID]])])
-  df = plotMDS(y, pch=16,col=c(col25,pal34H)[cluster], main="MDS") 
+  df = limma::plotMDS(y, pch=16,col=c(col25,pal34H)[cluster], main="MDS") 
   df = data.frame(x = df$x,y=df$y,pb_groupID = names(df$x))
   df = cbind(df,colDat[match(df$pb_groupID,colDat[[pb_groupID]]),!colnames(colDat) %in% colnames(df)])
   for(f in MDS_groups){
@@ -146,48 +142,30 @@ fit_model <- function(pb,colDat,formula,geneMap,groupID='group',MDS_groups = c('
 
 
 
-##----------------------------------------------------##
-##  Import 2n-T21 age-matched fThy seurat object    ####
-##----------------------------------------------------##
+##------------------------------------##
+##  Import 2n fThy seurat object    ####
+##------------------------------------##
 tissue = 'thyroid'
 
 ## Import foetal 2n thyrocytes only
-srat_in_fp = '/lustre/scratch125/casm/team274sb/mt22/Thyroid/Data/fetalThyroid/fThyrocytes_2n_jul23.RDS'
-srat_in_fp = '~/FetalThyroidAtlas/Data/fThyrocytes_2n_atlas.RDS'
+srat_in_fp = '~/FetalThyroidAtlas/Data/fThyroid_2n_atlas.RDS'
+
 
 if(!file.exists(srat_in_fp)){
-  stop(sprintf('Cannot find input directory for annotated AK-REF merged sratObj for tissue %s \nThe path is: \n%s',tissue, srat_in_fp))
-  # srat = Read10X('~/lustre_mt22/Thyroid/Data/agematched_2nT21/oct24')
-  # srat = CreateSeuratObject(srat)
-  # srat = standard_clustering(srat)
-  # srat$cellID = rownames(srat@meta.data)
-  # umap_coord = read.csv('~/lustre_mt22/Thyroid/Data/agematched_2nT21/oct24/UMAP.csv.gz',row.names = 1)
-  # colnames(umap_coord) =c('UMAP_1','UMAP_2')
-  # rownames(umap_coord) = srat$cellID
-  # srat@reductions$umap@cell.embeddings = as.matrix(umap_coord)
-  # mdat = read.csv('~/lustre_mt22/Thyroid/Data/agematched_2nT21/oct24/metadata.csv.gz',row.names = 1)
-  # srat@meta.data = cbind(srat@meta.data,mdat[match(srat$cellID,rownames(mdat)),!colnames(mdat) %in% colnames(srat@meta.data)])
-  # DimPlot(srat,group.by = 'donorID')
-  # saveRDS(srat,srat_in_fp)
+  stop(sprintf('Cannot find fetal thyroid 2n atlas object'))
 }else{
   srat = readRDS(srat_in_fp)   
-  srat$tissue = tissue
-  srat$cellID = rownames(srat@meta.data)
+  srat$tissue = 'fThyroid'
 }
 
-## check that only cells in G1 are retained
-if(!keepCylcingCells){
-  cyclingCells = srat$cellID[grepl('Cycling',srat$celltype)]
-  if(length(cyclingCells) > 0){
-    message(sprintf('Removing cycling cells from srat for tissue %s',tissue))
-    srat = subset(srat, subset = cellID %in% srat$cellID[!srat$cellID %in% cyclingCells])
-  }
-}
+## Subset to keep just TS1 and TS2
+srat = subset(srat,subset = celltype %in% c('mes_CYGB','mes_KCNB2'))
 
 ## Adjust some metadata
+srat$cellID = rownames(srat@meta.data)
 srat$finalAnn = srat$celltype
-srat$finalAnn[srat$finalAnn == 'thy_TH_processing'] = 'fTFC1'
-srat$finalAnn[srat$finalAnn == 'thy_Lumen-forming'] = 'fTFC2'
+srat$finalAnn[srat$finalAnn == 'mes_CYGB'] = 'fTS1'
+srat$finalAnn[srat$finalAnn == 'mes_KCNB2'] = 'fTS2'
 srat$Genotype = srat$karyotype
 srat$donorID = srat$donor
 srat$age_group = ifelse(srat$pcw %in% c(9,10),'9-10',
@@ -202,14 +180,13 @@ srat$group = paste0(srat$donor,'_',srat$finalAnn)
 ##  ~ Celltype + donorID (all age_group)   ####
 ##-------------------------------------------##
 
-
-outDir = '~/lustre_mt22/Thyroid/Results_v2/2.1_DEG_2n_fTFC1.vs.fTFC2/oct24/celltype_donorID_allAgeGroup'
+outDir = file.path(main_outdir,'celltype_donorID_allAgeGroup')
 if(!dir.exists(outDir)){
   dir.create(outDir,recursive = T)
 }
 setwd(outDir)
 
-
+minCell = 30
 result_fp = file.path(outDir,'pb_edgeR_allAgeGroup.RDS')
 if(file.exists(result_fp)){
   out = readRDS(result_fp)
@@ -222,7 +199,7 @@ if(file.exists(result_fp)){
   #Check we have a reasonable number of counts from both settings. ie Get number of cells for the relevant cell type and genenotype
   nCellsGroup = table(factor(srat.sub@meta.data$finalAnn))
   
-  if((!all(nCellsGroup>=50))){
+  if((!all(nCellsGroup>=minCell))){
     message(sprintf('Low number of cells detected'))
     print(nCellsGroup)
     next
@@ -230,7 +207,7 @@ if(file.exists(result_fp)){
   
   #Check how many from individual donors
   nCells = table(paste0(srat.sub@meta.data$group))
-  if(sum(nCells>50)<3){
+  if(sum(nCells>minCell)<3){
     message(sprintf("Too few effective replicates.  Skipping..."))
     print(nCells)
     next
@@ -240,10 +217,10 @@ if(file.exists(result_fp)){
   
   
   # remove individuals with < 30 cells
-  group_toKeep = names(nCells[nCells >= 30])
+  group_toKeep = names(nCells[nCells >= minCell])
   
   # if(ageGroup == '9-10'){
-  #   group_toKeep = group_toKeep[!group_toKeep %in% c('Srv39_fTFC1','Srv39_fTFC2')]
+  #   group_toKeep = group_toKeep[!group_toKeep %in% c('Srv39_fTS1','Srv39_fTS2')]
   # }
   #OK, we're going ahead, create the needed objects
   toc = srat.sub@assays$RNA@counts[,colnames(srat.sub@assays$RNA@counts) %in% srat.sub$cellID[srat.sub$group %in% group_toKeep]]
@@ -264,7 +241,6 @@ if(file.exists(result_fp)){
   toc = toc[rownames(toc) %in% geneMap$ensID[geneMap$chr %in% tgtChrs & 
                                                !is.na(geneMap$gene_biotype) & 
                                                geneMap$gene_biotype == 'protein_coding'],]
-  #toc = toc[rownames(toc) %in% gns$gene_id,]
   coords = gns[rownames(toc)]
   
   
@@ -302,11 +278,11 @@ if(file.exists(result_fp)){
   
   ##=========================##
   # Fit EDGER model
-  #mycontrast = 'finalAnnfTFC2'
+  #mycontrast = 'finalAnnfTS2'
   pdf(file.path(outDir,paste0('pbEdgeR_plots.pdf')))
-  out[[g]] = fit_model(pb,colDat,formula = '~ %s + donorID',geneMap=geneMap,
+  out[['celltype_donorID_allAgeGroup']] = fit_model(pb,colDat,formula = '~ %s + donorID',geneMap=geneMap,
                        MDS_groups = c('finalAnn','donorID','sex','age_group'),
-                       groupID='finalAnn',pb_groupID = donorID,coef = 2)
+                       groupID='finalAnn',pb_groupID = 'group',coef = 2)
   dev.off()
   
   saveRDS(out,result_fp)
@@ -321,7 +297,7 @@ allGenes = data.frame()
 for(i in 1:length(out)){
   y = out[[i]][['y']]
   pb = y$counts
-  write.csv(pb,'pb_2n_fTFC1.vs.fTFC2.csv',row.names = T,col.names = T)
+  write.csv(pb,'pb_2n_fTS1.vs.fTS2.csv',row.names = T,col.names = T)
   
   fit = out[[i]][['fit']]
   # Extract coefficients
@@ -336,19 +312,19 @@ for(i in 1:length(out)){
 
 allGenes$isDEG = (abs(allGenes$logFC) >= 0.2 & allGenes$FDR < 0.05)
 allGenes$group = ifelse(allGenes$isDEG,'DEG','nonDEG')
-allGenes$direction = ifelse(allGenes$logFC > 0,'fTFC2_up','fTFC2_down')
+allGenes$direction = ifelse(allGenes$logFC > 0,'fTS2_up','fTS2_down')
 allGenes$comp = '~celltype+donorID (allAgeGroup)'
 
 ## Add percentage of cells from each cell type expressing each gene
-allGenes$pct_fTFC1 = 100*rowSums(srat@assays$RNA@counts[allGenes$geneSym,srat$cellID[srat$finalAnn == 'fTFC1']] > 0) / length(srat$cellID[srat$finalAnn == 'fTFC1'])
-allGenes$pct_fTFC2 = 100*rowSums(srat@assays$RNA@counts[allGenes$geneSym,srat$cellID[srat$finalAnn == 'fTFC2']] > 0) / length(srat$cellID[srat$finalAnn == 'fTFC2'])
-allGenes$pct_diff = allGenes$pct_fTFC2 - allGenes$pct_fTFC1
+allGenes$pct_fTS1 = 100*rowSums(srat@assays$RNA@counts[allGenes$geneSym,srat$cellID[srat$finalAnn == 'fTS1']] > 0) / length(srat$cellID[srat$finalAnn == 'fTS1'])
+allGenes$pct_fTS2 = 100*rowSums(srat@assays$RNA@counts[allGenes$geneSym,srat$cellID[srat$finalAnn == 'fTS2']] > 0) / length(srat$cellID[srat$finalAnn == 'fTS2'])
+allGenes$pct_diff = allGenes$pct_fTS2 - allGenes$pct_fTS1
 
 write.csv(allGenes,file.path(outDir,'allGenes_log2FC_allAgeGroup.csv'))
 allGenes = read.csv(file.path(outDir,'allGenes_log2FC_allAgeGroup.csv'))
 
-deg = rbind(allGenes[allGenes$FDR < 0.01 & abs(allGenes$logFC) > 1 & allGenes$pct_fTFC2 > 20 & allGenes$direction == 'fTFC2_up',],
-            allGenes[allGenes$FDR < 0.01 & abs(allGenes$logFC) > 1 & allGenes$pct_fTFC1 > 20 & allGenes$direction == 'fTFC2_down',])
+deg = rbind(allGenes[allGenes$FDR < 0.01 & abs(allGenes$logFC) > 1 & allGenes$pct_fTS2 > 20 & allGenes$direction == 'fTS2_up',],
+            allGenes[allGenes$FDR < 0.01 & abs(allGenes$logFC) > 1 & allGenes$pct_fTS1 > 20 & allGenes$direction == 'fTS2_down',])
 table(deg$direction)
 min(abs(deg$pct_diff))
 table(deg$direction,deg$isTF)
@@ -358,13 +334,13 @@ table(deg$direction,deg$isTF)
 ##--------------------------------------------------##
 ##    Plot expression of DEGs in scRNAseq data    ####
 ##--------------------------------------------------##
-genes_toPlot = c(deg$geneSym[abs(deg$pct_diff) > 20 & deg$direction == 'fTFC2_down'][1:100],
-                 deg$geneSym[abs(deg$pct_diff) > 20 & deg$direction == 'fTFC2_up'][1:100])
+genes_toPlot = c(deg$geneSym[abs(deg$pct_diff) > 20 & deg$direction == 'fTS2_down'][1:100],
+                 deg$geneSym[abs(deg$pct_diff) > 20 & deg$direction == 'fTS2_up'][1:100])
 length(genes_toPlot)
 
 Idents(srat) = srat$finalAnn
 srat$group = paste0(srat$finalAnn,':',srat$age_group,':',srat$donor)
-DotPlot(srat,idents = c('fTFC1','fTFC2'),group.by = 'finalAnn',
+DotPlot(srat,idents = c('fTS1','fTS2'),group.by = 'finalAnn',
         features = genes_toPlot
 )+RotatedAxis() + 
   theme(axis.text.x = element_text(size=8,angle = 90,vjust = 0.5,hjust = 1),

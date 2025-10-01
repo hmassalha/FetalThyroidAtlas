@@ -1,12 +1,12 @@
 ## Finding evidence of TFC1 and TFC2 in publicly available adult normal thyrocyte datasets ##
 
-main_outDir = "Results/2505/fThy_in_normal_aThy"
+main_outDir = "Results/2508/fThy_in_normal_aThy"
 if(!dir.exists(main_outDir)){
   dir.create(main_outDir,recursive = T)
 }
 
 #setwd(main_outDir)
-plotDir = 'Figures/2505'
+plotDir = 'Figures/2508'
 if(!dir.exists(plotDir)){
   dir.create(plotDir,recursive = T)
 }
@@ -16,19 +16,20 @@ if(!dir.exists(plotDir)){
 ##----------------##
 library(Seurat)
 library(tidyverse)
-#source("~/lustre_mt22/Thyroid/scripts/final_script/forPublication/v1/helperFunctions.R")
 source("R/utils/logisticRegression.R")
 source("R/utils/runLR.R")
+source("R/utils/misc.R")
 
 
 ##-------------------------------------------------##
 ##    Import different adult scRNAseq datasets   ####
 ##-------------------------------------------------##
-datasets_fp = c('Wang22'='Data/published_scRNAseq/Wang_etal_2022/Wang_etal_2022.RDS',
-                   'Pu21'='Data/published_scRNAseq/Pu_etal_2021/Pu_etal_2021.RDS',
-                   'Hong23'='Data/published_scRNAseq/Hong_etal_2023/Hong_etal_2023.RDS',
-                   'Mosteiro23'='Data/published_scRNAseq/Mosteiro_etal_2023/Mosteiro_etal_2023.RDS',
-                   'Lu23' = 'Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023.RDS')
+datasets_fp = c('Wang22'='Data/published_scRNAseq/Wang_etal_2022/Wang_etal_2022_thyrocytes_scanpyProcessing.RDS',
+                'Pu21'='Data/published_scRNAseq/Pu_etal_2021/Pu_etal_2021_thyrocytes_scanpyProcessing.RDS',
+                'Hong23'='Data/published_scRNAseq/Hong_etal_2023/Hong_etal_2023_thyrocytes_scanpyProcessing.RDS',
+                'Mosteiro23'='Data/published_scRNAseq/Mosteiro_etal_2023/Mosteiro_etal_2023_thyrocytes_scanpyProcessing.RDS',
+                'Lu23' = 'Data/published_scRNAseq/Lu_etal_2023/Lu_etal_2023_thyrocytes_scanpyProcessing.RDS',
+                'Han20'='Data/published_scRNAseq/Han_etal_2020/Han_etal_2020_thyrocytes_scanpyProcessing.RDS')
 if(!all(file.exists(datasets_fp))){
   warning(sprintf('These datasets do not exist, please check: %s',names(datasets_fp[!file.exists(datasets_fp)])))
   datasets_fp = datasets_fp[file.exists(datasets_fp)]
@@ -36,62 +37,78 @@ if(!all(file.exists(datasets_fp))){
 
 sratObj_list = list()
 
-
-if('Mosteiro23' %in% names(datasets_fp)){
-  aThy_Mosteiro23 = readRDS(datasets_fp['Mosteiro23'])
-  aThy_Mosteiro23$dataset = 'aThy_Mosteiro23'
-  sratObj_list[['aThy_Mosteiro23']] = aThy_Mosteiro23
-}
-
-if('Hong23' %in% names(datasets_fp)){
-  #aThy_Hong23 = readRDS('~/lustre_mt22/Thyroid/Data/published_scRNAseq/Hong_etal_2023/GSE182416_sratObj.RDS')
-  aThy_Hong23 = readRDS(datasets_fp['Hong23'])
-  aThy_Hong23$annot = as.character(aThy_Hong23$celltype_sub)
-  aThy_Hong23$dataset = 'aThy_Hong23'
-  sratObj_list[['aThy_Hong23']] = aThy_Hong23
-}
-
-if('Pu21' %in% names(datasets_fp)){
-  # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
-  aThy_Pu21 = readRDS(datasets_fp['Pu21'])
-  aThy_Pu21 <- subset(aThy_Pu21, subset = orig.ident %in% c('PTC1.P','PTC2.P','PTC3.P','PTC8.P','PTC9.P'))
-  aThy_Pu21 = standard_clustering(aThy_Pu21)
-  aThy_Pu21$celltype[aThy_Pu21$celltype == 'thy_Lumen-forming'] = 'fTFC2'
-  aThy_Pu21$annot = as.character(aThy_Pu21$celltype)
-  aThy_Pu21$dataset = 'aThy_Pu21'
-  sratObj_list[['aThy_Pu21']] = aThy_Pu21
-}
-
-
-if('Wang22' %in% names(datasets_fp)){
-  # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
-  aThy_Wang22 = readRDS(datasets_fp['Wang22'])
-  aThy_Wang22 = subset(aThy_Wang22,stim %in% c('NT'))
-  aThy_Wang22$annot = as.character(aThy_Wang22$celltype)
-  aThy_Wang22$dataset = 'aThy_Wang22'
-  sratObj_list[['aThy_Wang22']] = aThy_Wang22
-}
-
-
-
-if('Lu23' %in% names(datasets_fp)){
+if(all(grepl('_scanpyProcessing.RDS$',datasets_fp))){
+  sratObj_list = lapply(1:length(datasets_fp),function(i){
+    srat = readRDS(datasets_fp[i])
+    srat$dataset = paste0('aThy_',names(datasets_fp)[i])
+    ## Add annotation column
+    if(names(datasets_fp)[i] == 'Mosteiro23'){
+      srat = subset(srat,subset = annot != 'aEndo/Mes')
+    }else{
+      srat$annot = 'aThy_thyrocytes'
+    }
+    
+    if(names(datasets_fp)[1] == 'Wang22'){
+      srat$cellID= rownames(srat@meta.data)
+    }
+    
+    return(srat)
+  })
   
-  aThy_Lu23 = readRDS(datasets_fp['Lu23'])
+  names(sratObj_list) = names(datasets_fp)
+  checkmate::assert_true(all(sapply(1:length(sratObj_list),function(x){return(unique(sratObj_list[[x]]$dataset))}) == paste0('aThy_',names(sratObj_list))))
+}else{
+  if('Mosteiro23' %in% names(datasets_fp)){
+    aThy_Mosteiro23 = readRDS(datasets_fp['Mosteiro23'])
+    aThy_Mosteiro23$dataset = 'aThy_Mosteiro23'
+    sratObj_list[['aThy_Mosteiro23']] = aThy_Mosteiro23
+  }
   
-  # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
-  aThy_Lu23$condition = ifelse(grepl('NORM',aThy_Lu23$sample.ID),'normal',
-                               ifelse(grepl('PTC',aThy_Lu23$sample.ID),'PTC','others'))
-  aThy_Lu23 = subset(aThy_Lu23,condition == 'normal')
-  aThy_Lu23 = standard_clustering(aThy_Lu23)
-  aThy_Lu23$dataset = 'aThy_Lu23'
-  aThy_Lu23$annot = as.character(aThy_Lu23$celltype)
+  if('Hong23' %in% names(datasets_fp)){
+    aThy_Hong23 = readRDS(datasets_fp['Hong23'])
+    aThy_Hong23$annot = as.character(aThy_Hong23$celltype_sub)
+    aThy_Hong23$dataset = 'aThy_Hong23'
+    sratObj_list[['aThy_Hong23']] = aThy_Hong23
+  }
   
-  sratObj_list[['aThy_Lu23']] = aThy_Lu23
+  if('Pu21' %in% names(datasets_fp)){
+    # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
+    aThy_Pu21 = readRDS(datasets_fp['Pu21'])
+    aThy_Pu21 <- subset(aThy_Pu21, subset = orig.ident %in% c('PTC1.P','PTC2.P','PTC3.P','PTC8.P','PTC9.P'))
+    aThy_Pu21 = standard_clustering(aThy_Pu21)
+    aThy_Pu21$celltype[aThy_Pu21$celltype == 'thy_Lumen-forming'] = 'fTFC2'
+    aThy_Pu21$annot = as.character(aThy_Pu21$celltype)
+    aThy_Pu21$dataset = 'aThy_Pu21'
+    sratObj_list[['aThy_Pu21']] = aThy_Pu21
+  }
+  
+  
+  if('Wang22' %in% names(datasets_fp)){
+    # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
+    aThy_Wang22 = readRDS(datasets_fp['Wang22'])
+    aThy_Wang22 = subset(aThy_Wang22,stim %in% c('NT'))
+    aThy_Wang22$annot = as.character(aThy_Wang22$celltype)
+    aThy_Wang22$dataset = 'aThy_Wang22'
+    sratObj_list[['aThy_Wang22']] = aThy_Wang22
+  }
+  
+  
+  
+  if('Lu23' %in% names(datasets_fp)){
+    aThy_Lu23 = readRDS(datasets_fp['Lu23'])
+    
+    # This dataset contains tumour and para-tumour (normal), so need to subset to just keep "normal" cells
+    aThy_Lu23$condition = ifelse(grepl('NORM',aThy_Lu23$sample.ID),'normal',
+                                 ifelse(grepl('PTC',aThy_Lu23$sample.ID),'PTC','others'))
+    aThy_Lu23 = subset(aThy_Lu23,condition == 'normal')
+    aThy_Lu23 = standard_clustering(aThy_Lu23)
+    aThy_Lu23$dataset = 'aThy_Lu23'
+    aThy_Lu23$annot = as.character(aThy_Lu23$celltype)
+    
+    sratObj_list[['aThy_Lu23']] = aThy_Lu23
+  }
+  
 }
-
-
-
-
 
 
 ##-------------------------------------------##
@@ -107,54 +124,8 @@ with_SCPs = T
 ##---- Import REF dataset ------##
 ## Import fetal 2n thyrocytes only
 fThy_fp = 'Data/fThyrocytes_2n_atlas.RDS'
-if(!file.exists(fThy_fp)){
-    # Create a seurat object of just thyrocytes from diploid fetuses
-    fThyroid = Read10X('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n')
-    fThyroid = CreateSeuratObject(fThyroid)
-    # Add metadata
-    mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_obs.csv.gz',row.names = 1)
-    table(rownames(mdat) %in% rownames(fThyroid@meta.data))
-    table(colnames(fThyroid@meta.data) %in% colnames(mdat))
-    fThyroid@meta.data =  cbind(fThyroid@meta.data,mdat[match(rownames(fThyroid@meta.data),rownames(mdat)),!colnames(mdat) %in% colnames(fThyroid@meta.data)])
-    # Add UMAP_coords
-    fThyroid = standard_clustering(fThyroid)
-    umap = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_UMAP.csv.gz')
-    umap = column_to_rownames(umap,'X')
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_1'] = umap$UMAP_1[match(rownames(fThyroid@meta.data),rownames(umap))]
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_2'] = umap$UMAP_2[match(rownames(fThyroid@meta.data),rownames(umap))]
-    DimPlot(fThyroid,group.by = 'cluster',label = T,label.box = T,repel = T) + NoLegend()
-    saveRDS(fThyroid,'Data/fThyroid_2n_atlas.RDS')
-    
-    
-    ## Similarly for 2n-T21 object
-    # Create a seurat object of just thyrocytes from diploid fetuses
-    fThyroid_2nT21 = Read10X('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2nT21/mtx/')
-    fThyroid = CreateSeuratObject(fThyroid)
-    # Add metadata
-    mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_obs.csv.gz',row.names = 1)
-    table(rownames(mdat) %in% rownames(fThyroid@meta.data))
-    table(colnames(fThyroid@meta.data) %in% colnames(mdat))
-    fThyroid@meta.data =  cbind(fThyroid@meta.data,mdat[match(rownames(fThyroid@meta.data),rownames(mdat)),!colnames(mdat) %in% colnames(fThyroid@meta.data)])
-    # Add UMAP_coords
-    fThyroid = standard_clustering(fThyroid)
-    umap = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2n/fThyroid_2n_UMAP.csv.gz')
-    umap = column_to_rownames(umap,'X')
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_1'] = umap$UMAP_1[match(rownames(fThyroid@meta.data),rownames(umap))]
-    fThyroid@reductions$umap@cell.embeddings[,'UMAP_2'] = umap$UMAP_2[match(rownames(fThyroid@meta.data),rownames(umap))]
-    DimPlot(fThyroid,group.by = 'cluster',label = T,label.box = T,repel = T) + NoLegend()
-    saveRDS(fThyroid,'Data/fThyroid_2n_atlas.RDS')
-    
-    
-    
-    
-    fThy = subset(fThyroid,subset = cluster == 'Thyrocytes')
-    fThy = standard_clustering(fThy)
-    saveRDS(fThy,fThy_fp)
-}else{
-  fThy = readRDS(fThy_fp)  
-  fThy$cellID = rownames(fThy@meta.data)
-}
-
+fThy = readRDS(fThy_fp)  
+fThy$cellID = rownames(fThy@meta.data)
 fThy$finalAnn = fThy[[annot_column]]
 fThy$cellID = colnames(fThy)
 fThy = subset(fThy,subset = cellID %in% fThy$cellID[!fThy$celltype %in% c('thy_Cycling')])
@@ -195,11 +166,7 @@ message('REF.srat loaded')
 ##---- Configure REF.srat and tgt.srat for LRv1 ------##
 # Set tgt.srat temporarily as one of the adult thyrocytes object 
 tgt.srat = sratObj_list[[1]]
-
-tgt.genes = do.call(c,lapply(1:length(sratObj_list),function(i){return(rownames(sratObj_list[[i]]))}))
-tgt.genes = table(tgt.genes)
-tgt.genes = tgt.genes[tgt.genes == length(sratObj_list)]
-tgt.genes = names(tgt.genes)
+tgt.genes <- Reduce(intersect, lapply(sratObj_list, rownames))
 # Also expressed in REF.srat
 genesToKeep = intersect(tgt.genes,rownames(REF.srat))
 
@@ -299,40 +266,40 @@ for(i in 1:length(sratObj_list)){
   # 
 }
 
-
+thyrocytesObj_list = sratObj_list
 ## Subclustering only thyrocytes
-thyrocytesObj_list = list()
-for(i in 1:length(sratObj_list)){
-  s = subset(sratObj_list[[i]],subset = annot %in% c('aTFC1','aTFC2','aTFC3','aTFC4','aTFC5',
-                                                     'C0','C1','C2','C3','C4',
-                                                     'fTFC1','fTFC2',
-                                                     'Follicular_cells','Epithelial cell'))
-  s = standard_clustering(s,runHarmony = T,harmonyVar = 'orig.ident')
-  thyrocytesObj_list[[i]] = s
-}
+# thyrocytesObj_list = list()
+# for(i in 1:length(sratObj_list)){
+#   s = subset(sratObj_list[[i]],subset = annot %in% c('aTFC1','aTFC2','aTFC3','aTFC4','aTFC5',
+#                                                      'C0','C1','C2','C3','C4',
+#                                                      'fTFC1','fTFC2',
+#                                                      'Follicular_cells','Epithelial cell'))
+#   s = standard_clustering(s,runHarmony = T,harmonyVar = 'orig.ident')
+#   thyrocytesObj_list[[i]] = s
+# }
+# 
+# names(thyrocytesObj_list) = names(sratObj_list)
+# DimPlot(thyrocytesObj_list[[5]],group.by = 'annot',cols = col25,label = T,repel = T,label.box = T)
+# DimPlot(thyrocytesObj_list[[4]],group.by = 'seurat_clusters',cols = col25,label = T,repel = T,label.box = T)
+# DimPlot(thyrocytesObj_list[[4]],cells.highlight = thyrocytesObj_list[[4]]$cellID[thyrocytesObj_list[[4]]$seurat_clusters %in% c(6,13,9,8,12)])
+# 
+# # Pu21: remove clustes 6,13,9,8,12 - as these look like immune / thyrocytes doublets
+# clusters_toKeep = unique(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]]$seurat_clusters)
+# clusters_toKeep = clusters_toKeep[!clusters_toKeep %in% c(6,13,9,8,12)]
+# thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]] = subset(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]],subset=seurat_clusters %in% clusters_toKeep)
+# thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]] = standard_clustering(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]],runHarmony = T,harmonyVar = 'orig.ident')
+# 
+# # Lu23: regenerate UMAP with less tight clustering
+# s = thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Lu23')]]
+# DimPlot(s,group.by = 'seurat_clusters',cols=col25,label = T,label.box = T)
+# s = FindClusters(s, resolution = 0.2, reduction = "harmony")
+# s = RunUMAP(s, dims=1:20, reduction ="harmony",min.dist=0.45)
+# m = quickMarkers(s@assays$RNA@counts,s$seurat_clusters)
+# 
+# thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Lu23')]] = s
 
-names(thyrocytesObj_list) = names(sratObj_list)
-DimPlot(thyrocytesObj_list[[5]],group.by = 'annot',cols = col25,label = T,repel = T,label.box = T)
-DimPlot(thyrocytesObj_list[[4]],group.by = 'seurat_clusters',cols = col25,label = T,repel = T,label.box = T)
-DimPlot(thyrocytesObj_list[[4]],cells.highlight = thyrocytesObj_list[[4]]$cellID[thyrocytesObj_list[[4]]$seurat_clusters %in% c(6,13,9,8,12)])
-
-# Pu21: remove clustes 6,13,9,8,12 - as these look like immune / thyrocytes doublets
-clusters_toKeep = unique(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]]$seurat_clusters)
-clusters_toKeep = clusters_toKeep[!clusters_toKeep %in% c(6,13,9,8,12)]
-thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]] = subset(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]],subset=seurat_clusters %in% clusters_toKeep)
-thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]] = standard_clustering(thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Pu21')]],runHarmony = T,harmonyVar = 'orig.ident')
-
-# Lu23: regenerate UMAP with less tight clustering
-s = thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Lu23')]]
-DimPlot(s,group.by = 'seurat_clusters',cols=col25,label = T,label.box = T)
-s = FindClusters(s, resolution = 0.2, reduction = "harmony")
-s = RunUMAP(s, dims=1:20, reduction ="harmony",min.dist=0.45)
-m = quickMarkers(s@assays$RNA@counts,s$seurat_clusters)
-
-thyrocytesObj_list[[which(names(thyrocytesObj_list) == 'aThy_Lu23')]] = s
-
-saveRDS(thyrocytesObj_list,file.path(main_outDir,'published_aThyrocytesOnly_5datasets.RDS'))
-thyrocytesObj_list = readRDS(file.path(main_outDir,'published_aThyrocytesOnly_5datasets.RDS'))
+saveRDS(thyrocytesObj_list,file.path(main_outDir,'published_aThyrocytesOnly_6datasets.RDS'))
+thyrocytesObj_list = readRDS(file.path(main_outDir,'published_aThyrocytesOnly_6datasets.RDS'))
 
 
 ##-------------------------------##
@@ -352,8 +319,58 @@ data_toPlot$score = ifelse(data_toPlot$LRv1_fThyfull_diff > 5, 5,
                            ifelse(data_toPlot$LRv1_fThyfull_diff < -5,-5,data_toPlot$LRv1_fThyfull_diff))
 data_toPlot$cell_assignment = ifelse(data_toPlot$score >= 1.5,'TFC1',
                                      ifelse(data_toPlot$score <= -1.5,'TFC2','ambiguous'))
+## Add scanpy_cellID
+data_toPlot$scanpy_cellID = data_toPlot$cellID
+data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Hong23'] = gsub('\\.','-',data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Hong23'])
+data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Lu23'] = gsub('\\.','-',data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Lu23'])
+data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Wang22'] = gsub('_\\d$','',data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Wang22'])
 
-write.csv(data_toPlot,file.path(main_outDir,'adultThyrocytes_5datasets_LRv1.fThy.full.csv'))
+mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Han_2020/Han_2020_obs.csv.gz')
+checkmate::assert_true(all(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Han20'] %in% mdat$index))
+mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Hong_2023/Hong_2023_obs.csv.gz')
+checkmate::assert_true(all(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Hong23'] %in% mdat$Index))
+mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Lu_2023/Lu_2023_obs.csv.gz')
+checkmate::assert_true(all(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Lu23'] %in% mdat$X))
+mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Mosteiro_2023/Mosteiro_2023_obs.csv.gz')
+checkmate::assert_true(all(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Mosteiro23'] %in% mdat$X))
+mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Wang_2022/Wang_2022_obs.csv.gz')
+checkmate::assert_true(all(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Wang22'] %in% mdat$X))
+
+pu21_mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/public_normal_datasets_mtx/Pu_2021/Pu_2021_obs.csv.gz')
+pu21_mdat$cellID = paste0(pu21_mdat$donor_id,'_',gsub('-\\d$','',pu21_mdat$cell_id))
+pu21 = thyrocytesObj_list[['Pu21']]
+pu21$donorID = gsub('\\..*_.*$','',pu21$cellID)
+pu21$tissue_type_2 = gsub('^.*\\.|_.*$','',pu21$cellID)
+pu21$cellID_2 = paste0(pu21$donorID,'_',gsub('.*_|-\\d$','',pu21$cellID))
+
+pu21_mdat$cellID_matched = pu21$cellID[match(pu21_mdat$cellID,pu21$cellID_2)]
+
+data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Pu21'] = pu21_mdat$cell_id[match(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Pu21'],pu21_mdat$cellID_matched)]
+checkmate::assert_true(all(data_toPlot$scanpy_cellID[data_toPlot$dataset == 'aThy_Pu21'] %in% pu21_mdat$cell_id))
+
+
+
+## Add scaled-normalised expression level of specific genes 'NKX2-1','HHEX','FOXE1','PAX8','GLIS3','TSHR'
+data_toPlot = do.call(rbind,lapply(1:length(thyrocytesObj_list),function(i){
+  dataset_to_use = unique(thyrocytesObj_list[[i]]$dataset)
+  d = data_toPlot[data_toPlot$dataset == dataset_to_use,]
+  s = thyrocytesObj_list[[i]]
+  expr = s@assays$RNA@data[c('NKX2-1','HHEX','FOXE1','PAX8','GLIS3','TSHR'),rownames(s@meta.data)] %>% as.matrix() %>% t()
+  d = cbind(d,expr[match(d$cellID,rownames(expr)),])
+}))
+
+waldo::compare(data_toPlot[,!colnames(data_toPlot) %in% c('NKX2-1','HHEX','FOXE1','PAX8','GLIS3','TSHR')],data_toPlot)
+
+write.csv(data_toPlot,file.path(main_outDir,'adultThyrocytes_6datasets_LRv1.fThy.full.csv'))
+data_toPlot = read.csv(file.path(main_outDir,'adultThyrocytes_6datasets_LRv1.fThy.full.csv'),row.names = 1)
+table(data_toPlot$dataset)
+# Remove cells not from Thyroid_L4 in Wang_2022
+wang22 = readRDS('Data/published_scRNAseq/Wang_etal_2022/Wang_etal_2022_thyrocytes_scanpyProcessing.RDS')
+cells_to_remove = names(wang22$cellID[names(wang22$cellID) %in% data_toPlot$cellID & wang22$orig.ident != 'Thyroid_L4'])
+checkmate::assert_true(length(cells_to_remove) == 12)
+checkmate::assert_true(sum(data_toPlot$cellID %in% cells_to_remove) == 12)
+data_toPlot = data_toPlot[!data_toPlot$cellID %in% cells_to_remove,]
+dim(data_toPlot)
 
 
 
@@ -388,7 +405,7 @@ plotFun_aThy_LRv1.fThy_frac.Cell = function(noFrame=FALSE,noPlot=FALSE){
   print(p1)
 }
 
-saveFig(file.path(plotDir,'Fig2_aThy_LRv1.fThy_fracCell'),plotFun_aThy_LRv1.fThy_frac.Cell,rawData=dd,width = 4.5,height = 2.8,res = 500)  
+saveFig(file.path(plotDir,'Fig2_aThy_LRv1.fThy_fracCell'),plotFun_aThy_LRv1.fThy_frac.Cell,rawData=dd,width = 5.5,height = 2.8,res = 500)  
   
 
 
@@ -429,7 +446,7 @@ plotFun_aThy_UMAP_LRv1.fThy = function(noFrame=FALSE,noPlot=FALSE){
   print(p1)
 }
 
-saveFig(file.path(plotDir,'Fig2_aThy_UMAP_LRv1.fThy'),plotFun_aThy_UMAP_LRv1.fThy,rawData=data_toPlot,width = 15,height = 3.3,res = 500)  
+saveFig(file.path(plotDir,'Fig2_aThy_UMAP_LRv1.fThy'),plotFun_aThy_UMAP_LRv1.fThy,rawData=data_toPlot,width = 17,height = 3.3,res = 500)  
 
 
 

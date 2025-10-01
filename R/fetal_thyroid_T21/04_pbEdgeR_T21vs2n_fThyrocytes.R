@@ -61,27 +61,13 @@ if(!dir.exists(plotDir)){
 }
 
 # Import thyroid scRNA-seq objects
-srat_in_fp = 'Data/fThyroid_2nT21_agematched.RDS'
+fThyroid_2nT21_fp = 'Data/fThyroid_2nT21_agematched_atlas.RDS'
+srat = readRDS(fThyroid_2nT21_fp)   
 
-if(!file.exists(srat_in_fp)){
-  srat = Read10X('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2nT21/mtx')
-  srat = CreateSeuratObject(srat)
-  srat = standard_clustering(srat)
-  srat$cellID = rownames(srat@meta.data)
-  umap_coord = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2nT21/fThyroid_2nT21_UMAP.csv.gz',row.names = 1)
-  colnames(umap_coord) =c('UMAP_1','UMAP_2')
-  rownames(umap_coord) = srat$cellID
-  srat@reductions$umap@cell.embeddings = as.matrix(umap_coord)
-  mdat = read.csv('/nfs/team292/Thyroid_hm11_mt22/fThyroid_2nT21/fThyroid_2nT21_obs.csv.gz',row.names = 1)
-  srat@meta.data = cbind(srat@meta.data,mdat[match(srat$cellID,rownames(mdat)),!colnames(mdat) %in% colnames(srat@meta.data)])
-  DimPlot(srat,group.by = 'donorID')
-  saveRDS(srat,srat_in_fp)
-}else{
-  srat = readRDS(srat_in_fp)   
-}
 
 ### Plot proportion of fTFC1 vs fTFC2 in 2n vs T21
-dd = srat@meta.data %>% group_by(karyotype,donor,pcw,celltype) %>% summarise(nCell = n()) %>% 
+dd = srat@meta.data %>% filter(celltype %in% c('thy_TH_processing','thy_Lumen-forming')) %>% 
+  group_by(karyotype,donor,pcw,celltype) %>% summarise(nCell = n()) %>% 
   group_by(karyotype,donor,pcw) %>% mutate(totalCell = sum(nCell), frac = nCell/totalCell)
 dd$celltype[dd$celltype == 'thy_Lumen-forming'] = 'fTFC2'
 dd$celltype[dd$celltype == 'thy_TH_processing'] = 'fTFC1'
