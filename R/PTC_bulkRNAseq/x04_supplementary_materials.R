@@ -49,7 +49,7 @@ for(i in names(bulk_sources)){
                                                    .default = cancer_normal),
                     reference_genome = "GRCh38 2020-A",
                     accession_code = "EGAD00001015448",
-                    WGS_sample_id = dplyr::case_when(SampleID %in% c('PR62328a','PR62328b','PR64651c','PR64651d','PR64651e') ~ gsub('PR','PD',SampleID),
+                    WGS_sample_id = dplyr::case_when(SampleID %in% c('PR62328a','PR62328b','PR64651d','PR64651e') ~ gsub('PR','PD',SampleID),
                                                      .default = '-'),
                     WGS_coverage = dplyr::case_when(SampleID == 'PR62328a' ~ '40X',
                                                     SampleID == 'PR62328b' ~ '38X',

@@ -201,6 +201,7 @@ for(tgtCell in unique(srat$finalAnn)){
   colDat$Genotype[colDat$Genotype == '2n'] = 'diploid'
   colDat$Genotype = factor(colDat$Genotype,c('diploid','T21'))
   rownames(colDat) = colDat[[donorID]]
+  colDat$group = colDat[[group]]
   
   
   

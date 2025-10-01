@@ -313,19 +313,203 @@ adult_PTC_sratObj_list = lapply(adult_PTC_sratObj_list,function(x){
 })
 
 # ##----- Normal + PTC paediatric
-# pThy = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS')
-# pThy = subset(pThy,subset = annot %in% c('Thyrocytes','Tumour'))
-# pThy = standard_clustering(pThy)
-# pThy$annot = pThy$celltype
-# pThy$cellID
-# pThy$dataset <- 'pPTC_Sanger'
-# 
-# pThy <- UCell::AddModuleScore_UCell(pThy, features = geneList,ncores = 20)
-# FeaturePlot(pThy,'fTFC2_combined_UCell')
+pThy = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS')
+pThy = subset(pThy,subset = annot %in% c('Thyrocytes','Tumour'))
+pThy = standard_clustering(pThy)
+pThy$annot = pThy$celltype
+pThy$cellID
+pThy$dataset <- 'pPTC_Sanger'
 
+pThy <- UCell::AddModuleScore_UCell(pThy, features = geneList,ncores = 20)
+FeaturePlot(pThy,'fTFC2_combined_UCell')
+
+pThy = readRDS('Results/2505/PTC_snRNAseq/03_pThyCancer_annotation/pPTC_clean_soupedXrhoLimNone_annotated_2505.RDS')
+pThy = subset(pThy,subset = etiology != 'Normal')
+pThy = standard_clustering(pThy)
+pthy_umap = cbind(pThy@meta.data,pThy@reductions$umap@cell.embeddings)
+
+SupFig15_pPTC_tumouronly_UMAP = function(){
+  dd = pthy_umap[!pthy_umap$annot %in% c('doublets','unknown','lowQual'),]
+  dd$annot[dd$annot == 'Tumour' & dd$etiology == 'Met'] = 'Tumour cells (Met.)'
+  dd$annot[dd$annot == 'Tumour' & dd$etiology != 'Met'] = 'Tumour cells'
+  dd$annot = gsub('_',' ',dd$annot)
+  
+  set.seed(2397)
+  
+  dd=dd[sample(1:nrow(dd),50000),]
+  
+  
+  plotFun_celltype = function(noFrame=FALSE,noPlot=FALSE){
+    par(mar=c(0,0,0.8,0))
+    
+    plot(dd$UMAP_1,dd$UMAP_2,
+         las=1,
+         type='n',
+         cex.main = 0.85,xaxt='n',yaxt='n',
+         xlab='',ylab='',
+         main=ifelse(noFrame,'','Paediatric PTC'),
+         frame.plot=F)
+    
+    if(!noPlot){
+      celltype_cols = col25[1:n_distinct(dd$annot)]
+      celltype_cols = colAlpha(celltype_cols,alphas = 0.7)
+      names(celltype_cols) = unique(dd$annot)
+      celltype_cols[names(celltype_cols) == 'Tumour cells'] = colAlpha(grey(0.4),0.7)
+      celltype_cols[names(celltype_cols) == 'Tumour cells (Met.)'] = colAlpha(grey(0.7),0.7)
+      
+      points(dd$UMAP_1,dd$UMAP_2,
+             col = celltype_cols[as.character(dd$annot)],
+             pch = 19,
+             cex=0.07)
+      
+    }
+    
+    if(!noFrame){
+      #Add coloured labels
+      mids = aggregate(cbind(UMAP_1,UMAP_2) ~ annot,data=dd,FUN=mean)
+      mids$label = mids$annot
+      
+      plotrix::boxed.labels(mids$UMAP_1,mids$UMAP_2,
+                   labels=mids$label,cex = 0.6,xpad = 1.3,ypad = 2.3,border = T,
+                   bg=celltype_cols[mids$label],
+                   col='black')
+      
+      legend(x=-10, y=8,legend=unique(mids$label),fill = celltype_cols[unique(mids$label)],lwd = 0,cex = 0.75,lty = NA,xjust = 0,seg.len=0.01,box.lwd = 0.0,bty = 'n')
+    }
+  }
+  saveFig(file.path(plotDir,'SuppFig15_pPTC_tumourOnly_snRNAseq_UMAP'),plotFun_celltype,rawData=pthy_umap,width = 4.1,height = 4,res = 500)
+  
+  plotFun_donorID = function(noFrame=FALSE,noPlot=FALSE){
+    par(mar=c(0,0,0.8,0))
+    
+    plot(dd$UMAP_1,dd$UMAP_2,
+         las=1,
+         type='n',
+         cex.main = 0.85,xaxt='n',yaxt='n',
+         xlab='',ylab='',
+         main=ifelse(noFrame,'','Paediatric PTC'),
+         frame.plot=F)
+    
+    if(!noPlot){
+      donor_cols = c('Y24' = '#ecbdc4','Y46' = '#b4d3b2')
+      
+      points(dd$UMAP_1,dd$UMAP_2,
+             col = donor_cols[as.character(dd$donor)],
+             pch = 19,
+             cex=0.07)
+      
+    }
+  }
+  
+  saveFig(file.path(plotDir,'SuppFig15_pPTC_tumourOnly_snRNAseq_UMAP_donor'),plotFun_donorID,rawData=pthy_umap,width = 4.1,height = 4,res = 500)
+
+}
+suppfig_x_pPTC_celltype_dotplot = function(){
+  srat = pThy
+  srat$donor[srat$donor == 'Y46'] = 'P2'
+  srat$donor[srat$donor == 'Y24'] = 'P1'
+  srat$annot[srat$annot == 'Tumour' & srat$etiology == 'Met'] = 'Tumour (Met.)'
+  srat$annot[srat$annot == 'Thyrocytes'] = paste0('Thyrocytes_',srat$donor[srat$annot == 'Thyrocytes'])
+  srat$annot[grepl('Tumour',srat$annot)] = paste0(srat$annot[grepl('Tumour',srat$annot)],'_',srat$donor[grepl('Tumour',srat$annot)])
+  srat$annot_lvl2 = as.character(srat$annot)
+  srat$annot_lvl2[srat$annot_lvl2 %in% c('VECs','LECs','Mesenchymal','Fibroblasts','SMCs')] = 'Stromal cells'
+  srat$annot_lvl2[srat$annot_lvl2 %in% c('B_cells','Plasma_cells','T_cells','DC1','Monocytes','Mast_cells')] = 'Immune cells'
+  srat$annot_lvl2 = factor(srat$annot_lvl2,
+                      c('Tumour_P1','Tumour_P2','Tumour (Met.)_P2','Thyrocytes_P1','Thyrocytes_P2',
+                        'Stromal cells','Immune cells',
+                        #'VECs','LECs','Mesenchymal','Fibroblasts','SMCs',
+                        #'B_cells','Plasma_cells','T_cells','DC1','Monocytes','Mast_cells',
+                        'doublets',  'lowQual',  'unknown'))
+  Idents(srat) = srat$annot_lvl2
+  plotFun_pPTC_dotplot = function(noFrame=FALSE,noPlot=FALSE){
+    markers = c(
+      "TSHR", "NKX2-1", "PAX8", "GLIS3", "TG","SLC26A4","IYD", "HHEX", "FOXE1", "DUOXA1", "DUOXA2", "DUOX1","DUOX2", "SLC5A5", "ZNF804B", 
+      # Down-reg in tumour
+      "TPO", "COL23A1", "PPARGC1A", "SLC5A8", "DIO2", "TFF3", 
+      # up-reg in tumour
+      "LRRK2", "HMGA2", "LMO3", "MET", "VAV3", "FN1", "LGALS3", "SERPINA1",  
+      # Endothelium
+      "FLT1", "PLVAP", "MECOM", "VWF",
+      # Mesenchyme
+      "CDH11","LAMA2", "COL6A3",  "BICC1", "MGP", 
+      # Smooth muscle cells
+      "GJC1", "PDGFRB","CLMN", 
+      # Immune cells
+      "CD8A", "CD14", "PTPRC"
+    )
+    
+    p = DotPlot(srat,idents = unique(Idents(srat)[!Idents(srat) %in% c('doublets',  'lowQual',  'unknown')]),
+                group.by = 'annot_lvl2',
+                cols = c(colAlpha(grey(0.95),0.8),'black'),
+                features = markers) + 
+      RotatedAxis()+
+      theme(axis.text.y = element_text(size=10),
+            axis.text.x = element_text(size=8,vjust = 0.5,hjust = 1,angle = 90,face = "italic"),
+            legend.position = 'left',
+            legend.text = element_text(size = 8),
+            legend.title = element_text(size = 9),
+            legend.key.size = unit(0.4, "cm")
+      )+xlab('')+ylab('')
+    
+    print(p)
+  }
+  saveFig(file.path(plotDir,'SuppFig15_pPTC_tumourOnly_snRNAseq_dotplot'),plotFun_pPTC_dotplot,width = 8,height = 2.5,res = 500)  
+}
 
 ##----- Aggregate data -------##
 columns = c('cellID','annot','fTFC1_UCell','fTFC2_UCell','fTFC1_combined_UCell','fTFC2_combined_UCell','dataset')
+## pPTC
+ucell_pPTC = pThy@meta.data[,columns] %>% pivot_longer(cols = c('fTFC1_UCell','fTFC2_UCell','fTFC1_combined_UCell','fTFC2_combined_UCell'),
+                                                       names_to='module_type',values_to='score')
+ucell_pPTC$donorID = pThy$donor[match(ucell_pPTC$cellID,pThy$cellID)]
+ucell_pPTC$sample = paste0(pThy$donor[match(ucell_pPTC$cellID,pThy$cellID)],
+                           pThy$etiology[match(ucell_pPTC$cellID,pThy$cellID)])
+ucell_pPTC$group = paste0(ucell_pPTC$annot,'_',ucell_pPTC$sample)
+ucell_pPTC = ucell_pPTC[ucell_pPTC$annot != 'Thyrocytes',]
+
+plotFun_ucell_pThy_Fig5c = function(noFrame=FALSE,noPlot=FALSE){
+  dd = ucell_pPTC[ucell_pPTC$module_type %in% c('fTFC1_UCell','fTFC2_UCell') &
+                    !ucell_pPTC$sample %in% c('Y24Normal','Y46Normal'),]
+  dd$module_type = gsub('_UCell','',dd$module_type)
+  dd = dd %>% mutate(group = case_when(group == 'Tumour_Y24Tumour' ~ 'P1 - Primary tumour',
+                                       group == 'Tumour_Y46Tumour' ~ 'P2 - Primary tumour',
+                                       group == 'Tumour_Y46Met' ~ 'P2 - Lymphnode met.',
+                                       .default = 'others'))
+  p = ggplot(dd,aes(group,score))+
+    scale_fill_manual(values = c('fTFC1' = grey(0.6),'fTFC2'='orange'))+
+    facet_grid(~module_type,scales = 'free',space = 'free_x')+
+    #scale_y_continuous(breaks = c(0,0.1,0.2),labels = c('0.0','0.1','0.2'))+
+    theme_classic()+
+    xlab('')+ylab('Transcriptional enrichment score')+
+    theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+          strip.background=element_rect(linewidth=0),
+          axis.text = element_text(colour = 'black'),
+          axis.ticks = element_line(colour = 'black'),
+          panel.spacing.x = unit(0.5, "cm"),
+          axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'),legend.position = 'none')
+    
+  
+  if(noPlot & !noFrame){
+    # For plotting, subset each category (annot::dataset) to just 1000 cells
+    p1 = p+
+      geom_boxplot(outlier.shape = NA,aes(fill = module_type),alpha=0.6)
+  }
+  
+  if(!noPlot){
+    p1 = p + 
+      geom_quasirandom(data = dd[sample(1:nrow(dd),0.1*nrow(dd)),],size = 0.1,alpha=0.1,width = 0.2)+
+      geom_boxplot(outlier.shape = NA,aes(fill = module_type),alpha=0.6)+
+      theme(panel.border = element_blank())
+  }
+  
+  print(p1)
+  
+}
+
+
+saveFig(file.path(plotDir,'Fig5c_fTFC1.2_UCell_pPTC'),plotFun_ucell_pThy_Fig5c,rawData=dd,width = 3.5,height = 4,res = 500)
+
+
 
 ## Adult PTC datasets
 ucell_data_adult = do.call(rbind,lapply(adult_PTC_sratObj_list,function(x){
@@ -660,8 +844,8 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
     p1 = ggplot(dd, aes(moduleType, TotalScore)) +
       geom_boxplot(aes(fill=group_fill),outlier.colour = 'white',position = 'dodge', alpha = 0.7,width=0.4,linewidth=0.3,fill=grey(0.7)) +
-      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
-      scale_y_continuous(limits = c(0,0.32))+
+      geom_quasirandom(size=0.6,width = 0.15,alpha=1,col='black')+
+      scale_y_continuous(limits = c(0,0.33))+
       theme_classic()+
       #ggtitle(title)+
       xlab('')+ylab('Module score')+
@@ -674,7 +858,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     print(p1)
   }
   
-  saveFig(file.path(plotDir,'Fig4b_fTFC1.2_moduleScore_bulk.Foetal.Samples'),plotFun_sc.fThy.moduleScore_in_Sanger.Fetal.BulkSamples,rawData=dd,width = 1.6,height = 4,res = 500)
+  saveFig(file.path(plotDir,'Fig4b_fTFC1.2_moduleScore_bulk.Foetal.Samples'),plotFun_sc.fThy.moduleScore_in_Sanger.Fetal.BulkSamples,rawData=dd,width = 1.4,height = 3.4,res = 500)
   
 
   
@@ -711,6 +895,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
     table(dd$cancerNormal,dd$cancerNormal,dd$source)
     
+    class(dd$cancerType)
     dd$cancerType[dd$source %in% c('REBC_THYR_paed','REBC_THYR_adult') & 
                       dd$cancerNormal != 'Normal' & 
                       dd$sampleID %in% rebc_mdat$File.ID[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion)]] = paste0(dd$cancerType[dd$source %in% c('REBC_THYR_paed','REBC_THYR_adult') & 
@@ -718,7 +903,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
                                                                                                                                      dd$sampleID %in% rebc_mdat$File.ID[grepl('RET',rebc_mdat$WGS_CandidateDriverFusion)]],'_RET')
     
     dd$cancerType[grepl('RET',dd$cancerType)] = 'RET'
-    dd$cancerType[!grepl('RET',dd$cancerType)] = dd$cancerNormal[!grepl('RET',dd$cancerType)]
+    dd$cancerType[!grepl('RET',dd$cancerType)] = as.character(dd$cancerNormal[!grepl('RET',dd$cancerType)])
     
     # ## Remove REBC-THYR BRAF samples
     # samples_to_remove = rebc_mdat$File.ID[grepl('BRAF',rebc_mdat$WGS_CandidateDriverFusion) | 
@@ -736,6 +921,7 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
     
     #[!dd$sampleName %in% sample_metadata$geo_accession[grepl('_P|-P',sample_metadata$title)],]
+    dd$cancerType = as.character(dd$cancerType)
     p1 = ggplot(dd, aes(cancerNormal, normalised_score)) +
       geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
       geom_quasirandom(size=0.4,width = 0.15,alpha=0.6,aes(col=cancerType))+
@@ -763,6 +949,158 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
   }
   
   saveFig(file.path(plotDir,'Fig4c_fTFC1.2_moduleScore_bulkSamples_sub'),plotFun_fTFC_moduleScore,rawData=allScore,width = 6,height = 7,res = 500)
+  
+  
+  
+  
+  plotFun_fTFC_moduleScore = function(noFrame=FALSE,noPlot=FALSE){
+    
+    dd = allScore[grepl('FFPE|Thyrocytes|Tumour|fTFC|fThy|metastatic|Normal|aTFC|C\\d|PTC',allScore$cancerType) & 
+                    !grepl('follicular|tallCell',allScore$cancerType) &
+                    allScore$source %in% c('Sanger','TCGA_Thyroid',
+                                           'He_2021','Lee_2024','REBC_THYR_paed','REBC_THYR_adult') &
+                    allScore$moduleType %in% moduleType_toUse,]
+    
+    dd$ageGroup = ifelse(dd$source == 'Sanger',dd$ageCat,'adult')
+    dd = dd[dd$ageGroup != 'foetus',]
+    dd$cancerNormal = ifelse(dd$cancerType %in% c('Normal'),'Normal',
+                             ifelse(dd$cancerType == 'Normal.adj','Normal.adj','Tumour'))
+    dd$cancerNormal = factor(dd$cancerNormal,c('Normal','Normal.adj','Tumour'))
+    dd$med_normal = NA
+    for(dataset in unique(dd$source)){
+      for(mod in unique(dd$moduleType)){
+        tmp = dd[dd$source == dataset & dd$moduleType == mod,]
+        med_normal = median(tmp$TotalScore[tmp$cancerNormal == 'Normal'])
+        dd$med_normal[dd$source == dataset & dd$moduleType == mod] = med_normal
+      }
+    }
+    
+    dd$normalised_score = dd$TotalScore - dd$med_normal
+    dd$source = factor(dd$source,c('Sanger','REBC_THYR_paed', 'REBC_THYR_adult','TCGA_Thyroid','He_2021','Lee_2024'))
+    
+    table(dd$cancerNormal,dd$cancerNormal,dd$source)
+    
+    # Genetic drivers
+    dd$driver = rebc_mdat$Designated_Driver[match(dd$sampleID,rebc_mdat$File.ID)]
+    tcga_mdat = readRDS('Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS')
+    tcga_mdat = as.data.frame(colData(tcga_mdat))
+    dd$driver[dd$source == 'TCGA_Thyroid'] = paste0(as.character(tcga_mdat$paper_fusionDriverGenes[match(dd$sampleID[dd$source == 'TCGA_Thyroid'],
+                                                                          tcga_mdat$barcode)]),
+                                                    '::BRAF_',
+                                                    tcga_mdat$paper_BRAF[match(dd$sampleID[dd$source == 'TCGA_Thyroid'],
+                                                                                            tcga_mdat$barcode)]
+    )
+    
+    
+    dd$driver[dd$source == 'Sanger'] = 'NCOA4-RET'
+    dd$driver = gsub('::BRAF_0','',dd$driver)
+    dd$driver[dd$driver == ''] = NA
+    dd = dd %>% dplyr::mutate(driver_category = dplyr::case_when(grepl('RET',driver) & grepl('BRAF',driver) ~ 'RET-BRAF',
+                                                                 grepl('RET',driver) & !grepl('BRAF',driver) ~ 'RET',
+                                                                 !grepl('RET',driver) & grepl('BRAF',driver) ~ 'BRAF',
+                                                                 is.na(driver) ~ '-',
+                                                                 grepl('RAS',driver) ~ 'RAS',
+                                                                 grepl('NTRK',driver)~'NTRK',
+                                                                 .default = 'others'))
+    dd$driver_category[grepl('NCOA4_RET|NCOA4-RET',dd$driver) & dd$driver_category == 'RET'] = 'NCOA4_RET'
+    dd$driver_category[grepl('CCDC6_RET|CCDC6-RET',dd$driver) & dd$driver_category == 'RET'] = 'CCDC6_RET'
+    dd$driver_category[grepl('_RET|RET-OTHER',dd$driver) & dd$driver_category == 'RET'] = 'RET-OTHER'
+    table(dd$driver_category)
+    table(dd$driver[dd$driver_category == 'others'])
+    
+    
+    p = ggplot(dd[dd$cancerNormal == 'Tumour',], aes(moduleType, normalised_score)) +
+      geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
+      geom_quasirandom(size=0.6,width = 0.15,alpha=1)+
+      geom_boxplot(aes(fill=moduleType),outlier.shape = NA,position = 'dodge', alpha = 0.5,width=0.5,linewidth=0.3,colour='black') +
+      scale_fill_manual(values =c('fTFC1'=grey(0.6),'fTFC2'='orange'))+
+      facet_grid(~ source,scales = 'free',space = 'free_x')+
+      theme_classic()+
+      xlab('')+ylab('Centralised fTFC signature score')+
+      theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+            strip.background=element_rect(linewidth=0),
+            legend.position = 'none',
+            axis.text = element_text(colour = 'black'),
+            axis.ticks = element_line(colour = 'black'),
+            axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'))
+    print(p)
+    
+  }
+  
+  plotDir = 'Figures/2508'
+  saveFig(file.path(plotDir,'Fig5c_fTFC1.2_moduleScore_bulkSamples_tumourOnly'),plotFun_fTFC_moduleScore,rawData=dd,width = 6,height = 4,res = 500)
+  
+  
+  plotFun_fTFC1.2_moduleScore_subFig15 = function(noFrame=FALSE,noPlot=FALSE){
+    dd$group = paste0(dd$moduleType,'-',dd$cancerNormal)
+    p1 = ggplot(dd, aes(group, normalised_score)) +
+      geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
+      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
+      geom_boxplot(aes(fill=cancerNormal),outlier.shape = NA,position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
+      #geom_point(data=dd[dd$cancerType == 'RET',],size=4)+
+      scale_fill_manual(values =c('Normal'=grey(0.8),'Normal.adj'=grey(0.4),'Tumour'='#511378'))+
+      facet_grid(~ source,scales = 'free',space = 'free_x')+
+      theme_classic()+
+      xlab('')+ylab('Centralised fTFC signature score')+
+      theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+            strip.background=element_rect(linewidth=0),
+            axis.text = element_text(colour = 'black'),
+            axis.ticks = element_line(colour = 'black'),
+            axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'))
+    
+    print(p1)
+  }
+  saveFig(file.path(plotDir,'SupFig15_fTFC1.2_moduleScore_bulkSamples'),plotFun_fTFC1.2_moduleScore_subFig15,rawData=dd,width = 10,height = 4,res = 500)
+  
+  
+  plotFun_fTFC1.2_moduleScore_Driver_subFig15 = function(noFrame=FALSE,noPlot=FALSE){
+    dd$group = dd$driver_category
+    dd$group[dd$cancerNormal != 'Tumour'] = as.character(dd$cancerNormal[dd$cancerNormal != 'Tumour'])
+    dd$group[dd$group == '-'] = 'unknown'
+    dd$group = factor(dd$group,levels = c('Normal','Normal.adj','NCOA4_RET','CCDC6_RET','RET-OTHER','BRAF','RAS',
+                                          'NTRK',"others", 'unknown'))
+    p1 = ggplot(dd, aes(group, normalised_score)) +
+      geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
+      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
+      geom_boxplot(aes(fill=cancerNormal),outlier.shape = NA,position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
+      #geom_point(data=dd[dd$cancerType == 'RET',],size=4)+
+      scale_fill_manual(values =c('Normal'=grey(0.8),'Normal.adj'=grey(0.4),'Tumour'='#511378'))+
+      facet_grid(~ source + moduleType,scales = 'free',space = 'free_x')+
+      theme_classic()+
+      xlab('')+ylab('Centralised fTFC signature score')+
+      theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+            strip.background=element_rect(linewidth=0),
+            axis.text = element_text(colour = 'black'),
+            axis.ticks = element_line(colour = 'black'),
+            axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'))
+    
+    print(p1)
+  }
+  saveFig(file.path(plotDir,'SupFig15_fTFC1.2_moduleScore_bulkSamples_driver'),plotFun_fTFC1.2_moduleScore_Driver_subFig15,rawData=dd,width = 13,height = 3.5,res = 500)
+  
+  
+  
+  
+  
+  plotFun = function(){
+    dd$group = paste0(dd$moduleType,'-',dd$cancerNormal)
+    p1 = ggplot(dd, aes(group, normalised_score)) +
+      geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
+      geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
+      geom_boxplot(aes(fill=cancerNormal),outlier.shape = NA,position = 'dodge', alpha = 0.8,width=0.5,linewidth=0.3,colour='black') +
+      #geom_point(data=dd[dd$cancerType == 'RET',],size=4)+
+      scale_fill_manual(values =c('Normal'=grey(0.8),'Normal.adj'=grey(0.4),'Tumour'='#511378'))+
+      facet_grid(~ source,scales = 'free',space = 'free_x')+
+      theme_classic()+
+      xlab('')+ylab('Centralised fTFC signature score')+
+      theme(panel.border = element_rect(fill=F,colour = 'black'),axis.line = element_blank(),
+            strip.background=element_rect(linewidth=0),
+            axis.text = element_text(colour = 'black'),
+            axis.ticks = element_line(colour = 'black'),
+            axis.text.x = element_text(size = 10,angle = 90, vjust = 0.5,hjust = 1,colour = 'black'))
+    
+    print(p1)
+  }
 }
 
 

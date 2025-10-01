@@ -44,8 +44,11 @@ geneMap$chr = as.character(seqnames(gns[match(geneMap$ensID,gns$gene_id)]))
 
 bioMart_annot = read.csv('~/lustre_mt22/generalResources/GRCh38_2020A_geneAnnotation.csv')
 geneMap = cbind(geneMap,bioMart_annot[match(geneMap$ensID,bioMart_annot$ensID),!colnames(bioMart_annot) %in% c('X',colnames(geneMap))])
-
-
+geneMap = read.csv('~/FetalThyroidAtlas/Results/geneMap.csv')
+geneMap$gene_biotype = geneMap$gene_type
+geneMap$geneSym = geneMap$gene_name
+geneMap$ensID = geneMap$gene_id
+geneMap$chr = geneMap$seqnames
 
 fit_model <- function(pb,colDat,formula,geneMap,groupID='group',MDS_groups = c('Genotype','donorID','sex'),pb_groupID='donorID',coef=NULL,mycontrast=NULL){
   
@@ -150,7 +153,7 @@ tissue = 'thyroid'
 
 ## Import foetal 2n thyrocytes only
 srat_in_fp = '/lustre/scratch125/casm/team274sb/mt22/Thyroid/Data/fetalThyroid/fThyrocytes_2n_jul23.RDS'
-
+srat_in_fp = '~/FetalThyroidAtlas/Data/fThyrocytes_2n_atlas.RDS'
 
 if(!file.exists(srat_in_fp)){
   stop(sprintf('Cannot find input directory for annotated AK-REF merged sratObj for tissue %s \nThe path is: \n%s',tissue, srat_in_fp))
@@ -169,6 +172,7 @@ if(!file.exists(srat_in_fp)){
 }else{
   srat = readRDS(srat_in_fp)   
   srat$tissue = tissue
+  srat$cellID = rownames(srat@meta.data)
 }
 
 ## check that only cells in G1 are retained
@@ -260,6 +264,7 @@ if(file.exists(result_fp)){
   toc = toc[rownames(toc) %in% geneMap$ensID[geneMap$chr %in% tgtChrs & 
                                                !is.na(geneMap$gene_biotype) & 
                                                geneMap$gene_biotype == 'protein_coding'],]
+  #toc = toc[rownames(toc) %in% gns$gene_id,]
   coords = gns[rownames(toc)]
   
   
