@@ -1329,4 +1329,10 @@ ggplot(dom12,aes(`Age at operation`,TotalScore))+
   geom_point(aes(col=group),size=0.6)+
   facet_wrap(vars(moduleType))
 
+# 4. Compare fTFC1/2 signal to TDS ---------------------------------------------
+## Scoring Thyrocyte differentiation score
+tds_geneSet_expanded = c('DIO1','DIO2','DUOX1','DUOX2','FOXE1','GLIS3','NKX2-1','PAX8','SLC26A4','SLC5A5','SLC5A8','TG','THRA','THRB','TPO','TSHR',
+                         'ANO1','SLC26A4','TPO','IYD',
+                         'TG','PAX8','GLIS3','TSHR','SLC16A2','SLC16A10','EXOC4','ELMO1','VPS13C','STON2','SPG11')
+tds_prog_geneSet=c('NKX2-1','FOXE1','HHEX','UROD')
 
