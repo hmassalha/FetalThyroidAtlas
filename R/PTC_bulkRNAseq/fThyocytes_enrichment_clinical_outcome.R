@@ -16,6 +16,26 @@ plotDir = 'Figures/2505'
 # Import datasets --------------------------------------------------------------
 ## fTFC1/fTFC2 signature in bulk RNAseq data -----------------------------------
 allScore = read.csv(file.path(outDir,'fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv'))
+## Add cancerNormal and normalised_score to allScore globally
+allScore <- allScore %>%
+  mutate(
+    cancerNormal = case_when(
+      cancerType %in% c('Normal') ~ 'Normal',
+      cancerType == 'Normal.adj' ~ 'Normal.adj',
+      TRUE ~ 'Tumour'
+    )
+  )
+
+## Normalise within each dataset + module
+## (tumour score - median normal score for that dataset/module)
+allScore <- allScore %>%
+  group_by(source, moduleType) %>%
+  mutate(
+    normalised_score = TotalScore -
+      median(TotalScore[cancerNormal == 'Normal'], na.rm = TRUE)
+  ) %>%
+  ungroup()
+
 ## TCGA metadata ---------------------------------------------------------------
 tcga_se_path <- 'Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS'
 tcga_se = readRDS(tcga_se_path)
@@ -338,7 +358,7 @@ plot_tcga_associations <- function(
             get(score_col)
           )
         ) +
-          
+          geom_hline(yintercept = 0)+
           ggbeeswarm::geom_quasirandom(
             width = 0.15,
             alpha = 0.45,
@@ -423,6 +443,7 @@ plot_tcga_associations <- function(
             get(score_col)
           )
         ) +
+          geom_hline(yintercept = 0)+
           
           geom_point(
             alpha = 0.45,
@@ -472,7 +493,7 @@ plot_tcga_associations <- function(
       
     }, silent=TRUE)
   }
-}
+c
 
 vars_of_interest <- c(
   
@@ -511,9 +532,32 @@ vars_of_interest <- c(
 plot_tcga_associations(
   data = tcga_data,
   vars = vars_of_interest,
-  score_col = "TotalScore",
+  score_col = "normalised_score",
   outfile = file.path(
     outDir,
-    "TCGA_reviewer4_clinical_associations.pdf"
+    "TCGA_reviewer4_clinical_associations_normScore.pdf"
   )
 )
+
+# Refined plots ----------------------------------------------------------------
+clinical_outcome_var = c('ajcc_pathologic_n','paper_pathologic_N','paper_N0vsN1b',
+                         'paper_Follow_up_New_Tumor_Event','paper_Extrathyroidal_extension',
+                         'vital_status','days_to_death','days_to_last_follow_up',
+                         'ajcc_pathologic_t','paper_pathologic_T',
+                         'ajcc_pathologic_stage','paper_Neoplasm_Disease_Stage')
+sapply(tcga_mdat[tcga_mdat$cancerType != 'Normal',][, clinical_outcome_var], function(x) sum(is.na(x)))
+lapply(tcga_mdat[, clinical_outcome_var], table)
+
+plot_tcga_associations(
+  data = tcga_data,
+  vars = clinical_outcome_var,
+  score_col = "normalised_score",
+  outfile = file.path(
+    outDir,
+    "TCGA_reviewer4_clinical_associations_selectedVar.pdf"
+  )
+)
+
+# ajcc_pathologic_n
+
+

@@ -1081,3 +1081,59 @@ cat(sprintf(
   )
 ))
 cat("===========================================\n")
+
+# EDA Plots --------------------------------------------------------------------
+
+ggplot(allScore_merged,aes(x = normalised_score,
+                        y = TDS_normalised))+
+  geom_point(aes(col = source))+
+  geom_abline()+
+  geom_hline(yintercept = 0)+
+  geom_vline(xintercept = 0)+
+  # geom_quasirandom(
+  #   width = 0.15,
+  #   alpha = 1,
+  #   size = 0.7
+  # ) +
+  # geom_boxplot(
+  #   width = 0.65,
+  #   outlier.shape = NA,
+  #   alpha = 0.7,
+  #   colour = "black",
+  #   linewidth = 0.4
+  # ) +
+  facet_grid(
+    moduleType ~ cancerType,
+    scales = "free_x",
+    space = "free"
+  ) +
+  # scale_fill_manual(values = age_cols) +
+  # labs(
+  #   x = NULL,
+  #   y = "TDS enrichment score"
+  # ) +
+  theme_classic(base_size = 12) +
+  theme(
+    panel.border = element_rect(
+      colour = "black",
+      fill = NA,
+      linewidth = 0.5
+    ),
+    axis.line = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      colour = "black",
+      size = 9
+    ),
+    axis.text = element_text(
+      colour = "black",
+      size = 10
+    ),
+    axis.text.x = element_text(
+      angle = 90,
+      hjust = 1,
+      vjust = 0.5
+    ),
+    # panel.spacing.x = unit(0.7, "cm"),
+    legend.position = "none"
+  )
