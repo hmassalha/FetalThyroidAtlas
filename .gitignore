@@ -10,4 +10,5 @@ GDCdata/*
 MANIFEST.txt
 .ipynb_checkpoints/*
 SupplementaryTables/*
+.DS_Store
 
