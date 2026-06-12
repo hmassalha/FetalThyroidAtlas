@@ -1242,33 +1242,50 @@ cat("===========================================\n")
 
 # EDA Plots --------------------------------------------------------------------
 
-ggplot(allScore_merged, aes(x = normalised_score, y = TDS_normalised)) +
-  geom_point(aes(col = source)) +
-  geom_abline() +
+library(ggpubr)
+library(dplyr)
+
+cor_df <- allScore_merged %>%
+  group_by(moduleType, cancerNormal, source) %>%
+  summarise(
+    rho = cor(
+      normalised_score,
+      TDS_normalised,
+      method = "spearman",
+      use = "complete.obs"
+    ),
+    .groups = "drop"
+  ) %>%
+  mutate(label = paste0("rho = ", round(rho, 2)))
+p<- ggplot(allScore_merged, aes(
+  x = normalised_score,
+  y = TDS_normalised
+)) +
+  geom_point(size=0.5,alpha=0.7) +
+  # geom_abline() +
+  geom_smooth(method = 'lm')+
   geom_hline(yintercept = 0) +
   geom_vline(xintercept = 0) +
-  # geom_quasirandom(
-  #   width = 0.15,
-  #   alpha = 1,
-  #   size = 0.7
+  
+  # ggpubr::stat_cor(
+  #   method = "spearman",
+  #   label.x.npc = "left",   # position inside each facet
+  #   label.y.npc = "top",
+  #   size = 3
   # ) +
-  # geom_boxplot(
-  #   width = 0.65,
-  #   outlier.shape = NA,
-  #   alpha = 0.7,
-  #   colour = "black",
-  #   linewidth = 0.4
-  # ) +
+  geom_text(
+    data = cor_df,
+    aes(x = -Inf, y = Inf, label = label),
+    hjust = -0.1,
+    vjust = 1.1,
+    inherit.aes = FALSE
+  )+
+  
   facet_grid(
-    moduleType ~ cancerType,
+    moduleType ~ source + cancerNormal,
     scales = "free_x",
     space = "free"
   ) +
-  # scale_fill_manual(values = age_cols) +
-  # labs(
-  #   x = NULL,
-  #   y = "TDS enrichment score"
-  # ) +
   theme_classic(base_size = 12) +
   theme(
     panel.border = element_rect(
@@ -1278,19 +1295,9 @@ ggplot(allScore_merged, aes(x = normalised_score, y = TDS_normalised)) +
     ),
     axis.line = element_blank(),
     strip.background = element_blank(),
-    strip.text = element_text(
-      colour = "black",
-      size = 9
-    ),
-    axis.text = element_text(
-      colour = "black",
-      size = 10
-    ),
-    axis.text.x = element_text(
-      angle = 90,
-      hjust = 1,
-      vjust = 0.5
-    ),
-    # panel.spacing.x = unit(0.7, "cm"),
+    strip.text = element_text(colour = "black", size = 9),
+    axis.text = element_text(colour = "black", size = 10),
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
     legend.position = "none"
   )
+ggsave(filename = file.path(outDir,'fTFC12_vs_TDS_scores.png'),width = 30,height = 7)

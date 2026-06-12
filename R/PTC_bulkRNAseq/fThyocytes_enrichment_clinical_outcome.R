@@ -59,21 +59,25 @@ table(tcga_mdat$sampleID %in% allScore$sampleID)
 
 
 # Correlation analysis ---------------------------------------------------------
-samples_to_keep <- intersect(allScore$sampleID, tcga_mdat$sampleID)
-tcga_data <- merge(
+samples_to_keep = intersect(allScore$sampleID, tcga_mdat$sampleID)
+tcga_data = merge(
   tcga_mdat[match(samples_to_keep, tcga_mdat$sampleID), ],
-  allScore[
-    allScore$sampleID %in% samples_to_keep,
+  allScore_merged[
+    allScore_merged$sampleID %in% samples_to_keep,
     c(
       "sampleID",
-      colnames(allScore)[!colnames(allScore) %in% colnames(tcga_mdat)]
+      colnames(allScore_merged)[
+        !colnames(allScore_merged) %in% colnames(tcga_mdat)
+      ]
     )
   ],
-  by = "sampleID",
+  by = 'sampleID',
   all = TRUE
 )
 
-checkmate::assert_true(nrow(tcga_data) == 526 * n_distinct(allScore$moduleType))
+checkmate::assert_true(
+  nrow(tcga_data) == 526 * n_distinct(allScore_merged$moduleType)
+)
 tcga_data$definition
 tcga_data$tumor_descriptor
 table(tcga_data$ajcc_pathologic_stage)
@@ -631,6 +635,12 @@ plot_tcga_associations(
     outDir,
     "TCGA_reviewer4_clinical_associations_normScore.pdf"
   )
+)
+
+list_cols <- names(tcga_data)[vapply(tcga_data, is.list, logical(1))]
+data.table::fwrite(
+  tcga_data %>% dplyr::select(-all_of(list_cols)),
+  file = file.path(outDir, 'TCGA_singscore_signatures.csv')
 )
 
 # Refined plots ----------------------------------------------------------------
