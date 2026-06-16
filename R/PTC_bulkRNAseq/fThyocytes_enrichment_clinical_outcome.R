@@ -13,151 +13,7 @@ if (!dir.exists(outDir)) {
 
 plotDir <- "Figures/2505"
 
-# Import datasets --------------------------------------------------------------
-## fTFC1/fTFC2 signature in bulk RNAseq data -----------------------------------
-allScore <- data.table::fread(file.path(
-  outDir,
-  "fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv"
-))
-## Add cancerNormal and normalised_score to allScore globally
-allScore <- allScore |>
-  mutate(
-    cancerNormal = case_when(
-      cancerType %in% c("Normal") ~ "Normal",
-      cancerType == "Normal.adj" ~ "Normal.adj",
-      TRUE ~ "Tumour"
-    )
-  )
-
-## Normalise within each dataset + module
-## (tumour score - median normal score for that dataset/module)
-allScore <- allScore |>
-  group_by(source, moduleType) |>
-  mutate(
-    normalised_score = TotalScore -
-      median(TotalScore[cancerNormal == "Normal"], na.rm = TRUE)
-  ) |>
-  ungroup()
-
-## TCGA metadata ---------------------------------------------------------------
-tcga_se_path <- "Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS"
-tcga_se <- readRDS(tcga_se_path)
-tcga_mdat <- as.data.frame(colData(tcga_se))
-tcga_mdat$sampleID <- rownames(tcga_mdat)
-tcga_mdat$source <- "TCGA_Thyroid"
-tcga_mdat$sampleName <- rownames(tcga_mdat)
-tcga_mdat$cancerType <- ifelse(
-  tcga_mdat$tissue_type == "Normal",
-  "Normal",
-  paste0("PTC_", tcga_mdat$classification_of_tumor)
-)
-tcga_mdat$age <- tcga_mdat$age_at_diagnosis
-tcga_mdat$sex <- tcga_mdat$gender
-
-
-table(tcga_mdat$sampleID %in% allScore$sampleID)
-
-
-# Correlation analysis ---------------------------------------------------------
-samples_to_keep = intersect(allScore$sampleID, tcga_mdat$sampleID)
-tcga_data = merge(
-  tcga_mdat[match(samples_to_keep, tcga_mdat$sampleID), ],
-  allScore_merged[
-    allScore_merged$sampleID %in% samples_to_keep,
-    c(
-      "sampleID",
-      colnames(allScore_merged)[
-        !colnames(allScore_merged) %in% colnames(tcga_mdat)
-      ]
-    )
-  ],
-  by = 'sampleID',
-  all = TRUE
-)
-
-checkmate::assert_true(
-  nrow(tcga_data) == 526 * n_distinct(allScore_merged$moduleType)
-)
-tcga_data$definition
-tcga_data$tumor_descriptor
-table(tcga_data$ajcc_pathologic_stage)
-table(tcga_data$prior_treatment)
-table(tcga_data$diagnosis_is_primary_disease)
-table(tcga_data$primary_diagnosis)
-table(tcga_data$vital_status)
-table(tcga_data$paper_Risk)
-table(tcga_data$paper_medical_history_thyroid)
-tcga_data$days_to_death
-
-table(tcga_data$paper_armDriver)
-# # Tumour sub-types
-# "definition", "tumor_descriptor","sample_type",
-# "ajcc_pathologic_stage","synchronous_malignancy","ajcc_pathologic_t","ajcc_pathologic_n","ajcc_pathologic_m"
-# # survival metrics
-# "vital_status", "days_to_diagnosis", "days_to_last_follow_up"
-# "age_at_diagnosis",
-# "year_of_diagnosis","days_to_death"
-# # clinical treatment
-# "treatments","primary_diagnosis", "prior_malignancy","prior_treatment","diagnosis_is_primary_disease",
-# "residual_disease"
-# "classification_of_tumor", "tumor_focality"
-# # patient metadata
-# "sex", "age"
-
-ggplot(
-  tcga_data[tcga_data$moduleType %in% c("fTFC1", "fTFC2"), ],
-  aes(reorder(paper_BRAF, TotalScore, median), TotalScore)
-) +
-  geom_quasirandom(
-    width = 0.15,
-    alpha = 1,
-    size = 0.7
-  ) +
-  geom_boxplot(
-    width = 0.65,
-    outlier.shape = NA,
-    alpha = 0.7,
-    colour = "black",
-    linewidth = 0.4
-  ) +
-  facet_grid(
-    ~ moduleType + cancerNormal,
-    scales = "free_x",
-    space = "free"
-  ) +
-  scale_fill_manual(values = age_cols) +
-  labs(
-    x = NULL,
-    y = "TDS enrichment score"
-  ) +
-  theme_classic(base_size = 12) +
-  theme(
-    panel.border = element_rect(
-      colour = "black",
-      fill = NA,
-      linewidth = 0.5
-    ),
-    axis.line = element_blank(),
-    strip.background = element_blank(),
-    strip.text = element_text(
-      colour = "black",
-      size = 9
-    ),
-    axis.text = element_text(
-      colour = "black",
-      size = 10
-    ),
-    axis.text.x = element_text(
-      angle = 90,
-      hjust = 1,
-      vjust = 0.5
-    ),
-    # axis.text.x = element_blank(),
-    # panel.spacing.x = unit(0.7, "cm"),
-    legend.position = "none"
-  )
-
-
+# Helpers ----------------------------------------------------------------------
 library(data.table)
 library(ggplot2)
 library(ggbeeswarm)
@@ -599,6 +455,151 @@ plot_tcga_associations <- function(
   return(p)
 }
 
+# Import datasets --------------------------------------------------------------
+## fTFC1/fTFC2 signature in bulk RNAseq data -----------------------------------
+allScore <- data.table::fread(file.path(
+  outDir,
+  "fTFC1.2_top100_geneSignatures_SingScore_bulkRNAseq.csv"
+))
+## Add cancerNormal and normalised_score to allScore globally
+allScore <- allScore |>
+  mutate(
+    cancerNormal = case_when(
+      cancerType %in% c("Normal") ~ "Normal",
+      cancerType == "Normal.adj" ~ "Normal.adj",
+      TRUE ~ "Tumour"
+    )
+  )
+
+## Normalise within each dataset + module
+## (tumour score - median normal score for that dataset/module)
+allScore <- allScore |>
+  group_by(source, moduleType) |>
+  mutate(
+    normalised_score = TotalScore -
+      median(TotalScore[cancerNormal == "Normal"], na.rm = TRUE)
+  ) |>
+  ungroup()
+
+## TCGA metadata ---------------------------------------------------------------
+tcga_se_path <- "Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS"
+tcga_se <- readRDS(tcga_se_path)
+tcga_mdat <- as.data.frame(colData(tcga_se))
+tcga_mdat$sampleID <- rownames(tcga_mdat)
+tcga_mdat$source <- "TCGA_Thyroid"
+tcga_mdat$sampleName <- rownames(tcga_mdat)
+tcga_mdat$cancerType <- ifelse(
+  tcga_mdat$tissue_type == "Normal",
+  "Normal",
+  paste0("PTC_", tcga_mdat$classification_of_tumor)
+)
+tcga_mdat$age <- tcga_mdat$age_at_diagnosis
+tcga_mdat$sex <- tcga_mdat$gender
+
+
+table(tcga_mdat$sampleID %in% allScore$sampleID)
+
+
+# Correlation analysis ---------------------------------------------------------
+samples_to_keep = intersect(allScore$sampleID, tcga_mdat$sampleID)
+tcga_data = merge(
+  tcga_mdat[match(samples_to_keep, tcga_mdat$sampleID), ],
+  allScore_merged[
+    allScore_merged$sampleID %in% samples_to_keep,
+    c(
+      "sampleID",
+      colnames(allScore_merged)[
+        !colnames(allScore_merged) %in% colnames(tcga_mdat)
+      ]
+    )
+  ],
+  by = 'sampleID',
+  all = TRUE
+)
+
+checkmate::assert_true(
+  nrow(tcga_data) == 526 * n_distinct(allScore_merged$moduleType)
+)
+tcga_data$definition
+tcga_data$tumor_descriptor
+table(tcga_data$ajcc_pathologic_stage)
+table(tcga_data$prior_treatment)
+table(tcga_data$diagnosis_is_primary_disease)
+table(tcga_data$primary_diagnosis)
+table(tcga_data$vital_status)
+table(tcga_data$paper_Risk)
+table(tcga_data$paper_medical_history_thyroid)
+tcga_data$days_to_death
+
+table(tcga_data$paper_armDriver)
+# # Tumour sub-types
+# "definition", "tumor_descriptor","sample_type",
+# "ajcc_pathologic_stage","synchronous_malignancy","ajcc_pathologic_t","ajcc_pathologic_n","ajcc_pathologic_m"
+# # survival metrics
+# "vital_status", "days_to_diagnosis", "days_to_last_follow_up"
+# "age_at_diagnosis",
+# "year_of_diagnosis","days_to_death"
+# # clinical treatment
+# "treatments","primary_diagnosis", "prior_malignancy","prior_treatment","diagnosis_is_primary_disease",
+# "residual_disease"
+# "classification_of_tumor", "tumor_focality"
+# # patient metadata
+# "sex", "age"
+
+ggplot(
+  tcga_data[tcga_data$moduleType %in% c("fTFC1", "fTFC2"), ],
+  aes(reorder(paper_BRAF, TotalScore, median), TotalScore)
+) +
+  geom_quasirandom(
+    width = 0.15,
+    alpha = 1,
+    size = 0.7
+  ) +
+  geom_boxplot(
+    width = 0.65,
+    outlier.shape = NA,
+    alpha = 0.7,
+    colour = "black",
+    linewidth = 0.4
+  ) +
+  facet_grid(
+    ~ moduleType + cancerNormal,
+    scales = "free_x",
+    space = "free"
+  ) +
+  scale_fill_manual(values = age_cols) +
+  labs(
+    x = NULL,
+    y = "TDS enrichment score"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    panel.border = element_rect(
+      colour = "black",
+      fill = NA,
+      linewidth = 0.5
+    ),
+    axis.line = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(
+      colour = "black",
+      size = 9
+    ),
+    axis.text = element_text(
+      colour = "black",
+      size = 10
+    ),
+    axis.text.x = element_text(
+      angle = 90,
+      hjust = 1,
+      vjust = 0.5
+    ),
+    # axis.text.x = element_blank(),
+    # panel.spacing.x = unit(0.7, "cm"),
+    legend.position = "none"
+  )
+
+
 vars_of_interest <- c(
   "definition",
   "tumor_descriptor",
@@ -730,7 +731,28 @@ reviewer_plots[["B"]] <- plot_tcga_associations(
   ) +
   theme(title = element_text(size = 10.5))
 
-# C: Patient vital status
+# C: Disease stage
+d <- tcga_data[
+  tcga_data$moduleType %in%
+    c("fTFC1", "fTFC2") &
+    tcga_data$cancerNormal != "Normal" &
+    tcga_data$paper_Neoplasm_Disease_Stage != "",
+]
+d$paper_Neoplasm_Disease_Stage <- factor(
+  d$paper_Neoplasm_Disease_Stage,
+  c("Stage I", "Stage II", "Stage III", "Stage IV", "Stage IVA", "Stage IVC")
+)
+reviewer_plots[["C"]] <- plot_tcga_associations(
+  data = d,
+  vars = "paper_Neoplasm_Disease_Stage",
+  score_col = "normalised_score",
+  outfile = NULL,
+  print_plot = FALSE
+) +
+  labs(title = "Neoplasm Disease Stage", y = "Centralised enrichment score") +
+  theme(title = element_text(size = 10.5))
+
+# D: Patient vital status
 d <- tcga_data[
   tcga_data$moduleType %in%
     c("fTFC1", "fTFC2") &
@@ -740,7 +762,7 @@ d$vital_status <- factor(
   d$vital_status,
   c("Alive", "Dead")
 )
-reviewer_plots[["C"]] <- plot_tcga_associations(
+reviewer_plots[["D"]] <- plot_tcga_associations(
   data = d,
   vars = "vital_status",
   score_col = "normalised_score",
@@ -752,27 +774,6 @@ reviewer_plots[["C"]] <- plot_tcga_associations(
     axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5),
     title = element_text(size = 10.5)
   )
-
-# D: Disease stage
-d <- tcga_data[
-  tcga_data$moduleType %in%
-    c("fTFC1", "fTFC2") &
-    tcga_data$cancerNormal != "Normal" &
-    tcga_data$paper_Neoplasm_Disease_Stage != "",
-]
-d$paper_Neoplasm_Disease_Stage <- factor(
-  d$paper_Neoplasm_Disease_Stage,
-  c("Stage I", "Stage II", "Stage III", "Stage IV", "Stage IVA", "Stage IVC")
-)
-reviewer_plots[["D"]] <- plot_tcga_associations(
-  data = d,
-  vars = "paper_Neoplasm_Disease_Stage",
-  score_col = "normalised_score",
-  outfile = NULL,
-  print_plot = FALSE
-) +
-  labs(title = "Neoplasm Disease Stage", y = "Centralised enrichment score") +
-  theme(title = element_text(size = 10.5))
 
 # Add driver annotation
 driver_annot <- data.table::fread(
@@ -793,7 +794,7 @@ tcga_data$group[
   tcga_data$group == "unknown" & tcga_data$paper_RAS == 1
 ] <- "RAS"
 
-p <- reviewer_plots[["D"]] +
+p <- reviewer_plots[["C"]] +
   facet_grid(
     ~ moduleType + cancerNormal + group,
     scales = "free_x",
@@ -836,10 +837,325 @@ reviewer_plots[["E"]] <- plot_tcga_associations(
 d$group[!is.na(d$paper_RAS) & d$paper_RAS == 1] <- "RAS"
 table(d$group, d$ajcc_pathologic_n)
 
+
+# extra plot: Disease stage by driver group
+d <- tcga_data[
+  tcga_data$moduleType %in%
+    c("fTFC1", "fTFC2") &
+    tcga_data$cancerNormal != "Normal" &
+    !tcga_data$paper_Neoplasm_Disease_Stage %in% c("", '[Not Available]'),
+]
+# d$paper_Neoplasm_Disease_Stage <- factor(
+#   d$paper_Neoplasm_Disease_Stage,
+#   c("Stage I", "Stage II", "Stage III", "Stage IV", "Stage IVA", "Stage IVC")
+# )
+d$group2 = paste0(as.character(d$paper_Neoplasm_Disease_Stage), '_', d$group)
+p <- plot_tcga_associations(
+  data = d,
+  vars = "group2",
+  score_col = "normalised_score",
+  outfile = NULL,
+  print_plot = FALSE
+) +
+  labs(title = "Neoplasm Disease Stage", y = "Centralised enrichment score") +
+  theme(title = element_text(size = 10.5)) +
+  facet_grid(
+    moduleType ~ cancerNormal + group,
+    scales = "free_x",
+    space = "free"
+  )
+p
+
+
+min_group_n_for_test = 3
+vars = "group2"
+module_keep <- c('fTFC1', 'fTFC2')
+score_col <- "normalised_score"
+dt <- data.table::as.data.table(d)
+dt <- dt[moduleType %in% module_keep]
+dd <- copy(
+  dt[
+    !is.na(get(vars)) &
+      !is.na(get(score_col))
+  ]
+)
+
+if (nrow(dd) < 10) {
+  next
+}
+det <- auto_detect_plot_type(x = dd[[vars]])
+plot_type <- det$type
+x <- det$data
+dd$plot_var <- dd[[vars]]
+
+if (is.factor(dd$plot_var)) {
+  dd$plot_var_display <- droplevels(dd$plot_var)
+} else {
+  dd$plot_var_display <- reorder(
+    dd$plot_var,
+    dd[[score_col]],
+    median,
+    na.rm = TRUE
+  )
+}
+
+if (nlevels(factor(dd$plot_var_display)) < 2) {
+  next
+}
+
+level_order <- levels(factor(dd$plot_var_display))
+level_counts <- table(factor(
+  dd$plot_var_display,
+  levels = level_order
+))
+level_labels <- paste0(
+  level_order,
+  "\n(n=",
+  as.integer(level_counts),
+  ")"
+)
+dd$plot_var_display_n <- factor(
+  dd$plot_var_display,
+  levels = level_order,
+  labels = level_labels
+)
+panel_split <- split(
+  dd,
+  interaction(dd$moduleType, dd$group, drop = TRUE)
+)
+panel_stats <- lapply(panel_split, function(subd) {
+  grp <- droplevels(factor(subd$plot_var_display))
+  y <- subd[[score_col]]
+
+  grp_counts <- table(grp)
+  keep_levels <- names(grp_counts)[grp_counts >= min_group_n_for_test]
+  keep_idx <- grp %in% keep_levels
+
+  grp_test <- droplevels(grp[keep_idx])
+  y_test <- y[keep_idx]
+  n_groups <- nlevels(grp_test)
+
+  if (n_groups < 2) {
+    return(data.frame(
+      moduleType = as.character(subd$moduleType[1]),
+      cancerNormal = as.character(subd$cancerNormal[1]),
+      group = as.character(subd$group[1]),
+      test_name = "Insufficient n",
+      p_raw = NA_real_,
+      posthoc_str = "",
+      use_for_bh = FALSE,
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  if (n_groups == 2) {
+    grp_levels <- levels(grp_test)
+    x1 <- y_test[grp_test == grp_levels[1]]
+    x2 <- y_test[grp_test == grp_levels[2]]
+    test_res <- tryCatch(
+      suppressWarnings(stats::wilcox.test(x = x1, y = x2)),
+      error = function(e) NULL
+    )
+    test_name <- "Wilcoxon"
+    posthoc_str <- ""
+  } else {
+    test_res <- tryCatch(
+      suppressWarnings(stats::kruskal.test(x = y_test, g = grp_test)),
+      error = function(e) NULL
+    )
+    test_name <- "Kruskal"
+
+    ## pairwise post-hoc (run now; display conditioned on q later)
+    posthoc_str <- tryCatch(
+      {
+        pw <- suppressWarnings(
+          stats::pairwise.wilcox.test(
+            x = y_test,
+            g = grp_test,
+            p.adjust.method = "BH"
+          )
+        )
+        pm <- pw$p.value
+        idx <- which(!is.na(pm), arr.ind = TRUE)
+        pairs <- apply(idx, 1, function(i) {
+          rn <- rownames(pm)[i[1]]
+          cn <- colnames(pm)[i[2]]
+          pv <- signif(pm[i[1], i[2]], 2)
+          paste0(cn, " vs ", rn, ": q=", pv)
+        })
+        paste(pairs, collapse = "\n")
+      },
+      error = function(e) ""
+    )
+  }
+
+  if (is.null(test_res)) {
+    return(NULL)
+  }
+
+  data.frame(
+    moduleType = as.character(subd$moduleType[1]),
+    cancerNormal = as.character(subd$cancerNormal[1]),
+    group = as.character(subd$group[1]),
+    test_name = test_name,
+    p_raw = test_res$p.value,
+    posthoc_str = if (exists("posthoc_str")) posthoc_str else "",
+    use_for_bh = TRUE,
+    stringsAsFactors = FALSE
+  )
+})
+panel_stats <- Filter(Negate(is.null), panel_stats)
+
+if (length(panel_stats) > 0) {
+  panel_stats <- do.call(rbind, panel_stats)
+  panel_stats$q_bh <- NA_real_
+  test_idx <- panel_stats$use_for_bh
+  panel_stats$q_bh[test_idx] <- p.adjust(
+    panel_stats$p_raw[test_idx],
+    method = "BH"
+  )
+  panel_stats$label <- ifelse(
+    panel_stats$use_for_bh,
+    paste0(
+      panel_stats$test_name,
+      "\nq=",
+      signif(panel_stats$q_bh, 3),
+      ifelse(
+        panel_stats$test_name == "Kruskal" &
+          !is.na(panel_stats$q_bh) &
+          panel_stats$q_bh < 0 &
+          nchar(panel_stats$posthoc_str) > 0,
+        paste0("\n", panel_stats$posthoc_str),
+        ""
+      )
+    ),
+    paste0("Insufficient n\n(<", min_group_n_for_test, "/group)")
+  )
+} else {
+  panel_stats <- NULL
+}
+dd$group = factor(
+  dd$group,
+  c(
+    'BRAF',
+    'NCOA4_RET',
+    'CCDC6_RET',
+    'RET-OTHER',
+    'NTRK',
+    'RAS',
+    'others',
+    'unknown'
+  )
+)
+panel_stats$group = factor(
+  panel_stats$group,
+  c(
+    'BRAF',
+    'NCOA4_RET',
+    'CCDC6_RET',
+    'RET-OTHER',
+    'NTRK',
+    'RAS',
+    'others',
+    'unknown'
+  )
+)
+dd$plot_var_display_n <- sub(
+  paste(
+    paste0('_', unique(as.character(dd$group))),
+    collapse = "|"
+  ),
+  '',
+  dd$plot_var_display_n
+)
+p <- ggplot(
+  dd,
+  aes(
+    .data$plot_var_display_n,
+    .data[[score_col]],
+    fill = .data$moduleType
+  )
+) +
+  geom_hline(yintercept = 0, linewidth = 0.5) +
+  ggbeeswarm::geom_quasirandom(
+    width = 0.15,
+    alpha = 0.45,
+    size = 0.5
+  ) +
+  geom_boxplot(
+    width = 0.65,
+    outlier.shape = NA,
+    alpha = 0.75,
+    colour = "black",
+    linewidth = 0.35
+  ) +
+  scale_fill_manual(
+    values = c(
+      "fTFC1" = grey(0.6),
+      "fTFC2" = "orange",
+      "TDS" = "#4D9DE0"
+    )
+  ) +
+  facet_grid(
+    moduleType ~ group,
+    scales = "free_x",
+    space = "free"
+  ) +
+  {
+    if (!is.null(panel_stats)) {
+      geom_text(
+        data = panel_stats,
+        aes(x = Inf, y = Inf, label = .data$label),
+        inherit.aes = FALSE,
+        hjust = 1.05,
+        vjust = 1.2,
+        size = 3.1
+      )
+    }
+  } +
+  labs(
+    title = vars,
+    x = NULL,
+    y = "Enrichment score"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.line = element_blank(),
+    panel.border = element_rect(
+      fill = NA,
+      colour = "black",
+      linewidth = 0.7
+    ),
+    strip.background = element_blank(),
+    axis.text.x = element_text(
+      angle = 90,
+      hjust = 1,
+      vjust = 0.5,
+      size = 8
+    ),
+    axis.ticks = element_line(linewidth = 0.5),
+    legend.position = "none"
+  ) +
+  labs(title = "Neoplasm Disease Stage", y = "Centralised enrichment score") +
+  theme(title = element_text(size = 10.5))
+p
+reviewer_plots[["F"]] <- p
+
+ggsave(
+  filename = file.path(
+    plotDir,
+    "TCGA_reviewer4_figure_diseaseStage_Driver.pdf"
+  ),
+  plot = p,
+  width = 10,
+  height = 4.7
+)
+
+
 reviewer_comment_figure <- patchwork::wrap_plots(
   reviewer_plots,
-  design = "AB\nCD\nEE",
-  heights = c(1, 1, 1.2),
+  design = "AB\nCD\nEE\nFF",
+  heights = c(1, 1, 1.2, 2),
   guides = "collect"
 ) +
   patchwork::plot_annotation(
@@ -857,7 +1173,7 @@ ggsave(
   ),
   plot = reviewer_comment_figure,
   width = 11,
-  height = 14
+  height = 18
 )
 
 
@@ -1045,7 +1361,7 @@ d$paper_Neoplasm_Disease_Stage <- factor(
   d$paper_Neoplasm_Disease_Stage,
   c("Stage I", "Stage II", "Stage III", "Stage IV", "Stage IVA", "Stage IVC")
 )
-reviewer_plots_tds[["D"]] <- plot_tcga_associations(
+reviewer_plots_tds[["C"]] <- plot_tcga_associations(
   data = add_tds_rows(d),
   vars = "paper_Neoplasm_Disease_Stage",
   score_col = "normalised_score",
