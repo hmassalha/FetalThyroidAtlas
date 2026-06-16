@@ -979,17 +979,17 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     dd$source = factor(dd$source,c('Sanger','REBC_THYR_paed', 'REBC_THYR_adult','TCGA_Thyroid','He_2021','Lee_2024'))
     
     table(dd$cancerNormal,dd$cancerNormal,dd$source)
-    
+    #dd <- read.delim('~/FetalThyroidAtlas/Figures/2508/Fig5c_fTFC1.2_moduleScore_bulkSamples_tumourOnly_rawData.tsv')
     # Genetic drivers
+    rebc_mdat = read.delim('~/FetalThyroidAtlas/Data/published_bulkRNAseq/Morton_21_TableS1_abg2538-data-s1.txt',sep='\t',header = T)
     dd$driver = rebc_mdat$Designated_Driver[match(dd$sampleID,rebc_mdat$File.ID)]
     tcga_mdat = readRDS('Data/published_bulkRNAseq/TCGA_Thyroid/TCGA_Thyroid_bulkRNA_se.RDS')
     tcga_mdat = as.data.frame(colData(tcga_mdat))
-    dd$driver[dd$source == 'TCGA_Thyroid'] = paste0(as.character(tcga_mdat$paper_fusionDriverGenes[match(dd$sampleID[dd$source == 'TCGA_Thyroid'],
-                                                                          tcga_mdat$barcode)]),
-                                                    '::BRAF_',
-                                                    tcga_mdat$paper_BRAF[match(dd$sampleID[dd$source == 'TCGA_Thyroid'],
-                                                                                            tcga_mdat$barcode)]
-    )
+    tcga_mdat$driver = ifelse(tcga_mdat$paper_Driver == 0, 'unknown', 
+                              ifelse(is.na(tcga_mdat$paper_fusionDriverGenes) | tcga_mdat$paper_fusionDriverGenes == '',
+                                ifelse(tcga_mdat$paper_BRAF,'BRAF',ifelse(tcga_mdat$paper_RAS,'RAS','others')),
+                                paste0(as.character(tcga_mdat$paper_fusionDriverGenes),'::BRAF_',tcga_mdat$paper_BRAF)))
+    dd$driver[dd$source == 'TCGA_Thyroid'] = tcga_mdat$driver[match(dd$sampleID[dd$source == 'TCGA_Thyroid'],tcga_mdat$barcode)]
     
     
     dd$driver[dd$source == 'Sanger'] = 'NCOA4-RET'
@@ -1059,6 +1059,8 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     dd$group[dd$group == '-'] = 'unknown'
     dd$group = factor(dd$group,levels = c('Normal','Normal.adj','NCOA4_RET','CCDC6_RET','RET-OTHER','BRAF','RAS',
                                           'NTRK',"others", 'unknown'))
+    dd$source = factor(dd$source,c('Sanger','REBC_THYR_paed','REBC_THYR_adult','TCGA_Thyroid','He_2021','Lee_2024'))
+    
     p1 = ggplot(dd, aes(group, normalised_score)) +
       geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
       geom_quasirandom(size=0.4,width = 0.15,alpha=0.6)+
@@ -1260,7 +1262,7 @@ fig4b_heatmap_bulkRNA = function(){
 rebc_thyr_scores = read.delim('~/thyroid/data/REBC-THYR-bulk-TPMs.scores.tsv',sep = '\t')
 rebc_mdat = read.delim('~/thyroid/data/REBC-THYR.metadata.tsv',sep='\t',header = F)
 rebc_clinical = read.delim('~/FetalThyroidAtlas/Data/published_bulkRNAseq/Morton_21_TableS1_abg2538-data-s1.txt',sep='\t',header = T)
-rebc_sample_sheet = read.delim('~/FetalThyroidAtlas/Data/published_bulkRNAseq/gdc_sample_sheet.2025-08-21.tsv',sep='\t')
+rebc_sample_sheet = read.delim('~/FetalThyroidAtlas/Data/published_bulkRNAseq/REBC-THYR_gdc_sample_sheet.2025-08-21.tsv',sep='\t')
 rebc_sample_sheet$Case.ID = gsub('-YQ','',rebc_sample_sheet$Case.ID)
 
 table(rebc_sample_sheet$Case.ID %in% rebc_clinical$REBC_ID)
