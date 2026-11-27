@@ -445,8 +445,19 @@ plotFun_aThy_UMAP_LRv1.fThy = function(noFrame=FALSE,noPlot=FALSE){
   
   print(p1)
 }
-
 saveFig(file.path(plotDir,'Fig2_aThy_UMAP_LRv1.fThy'),plotFun_aThy_UMAP_LRv1.fThy,rawData=data_toPlot,width = 17,height = 3.3,res = 500)  
+
+dd_source_data <- data_toPlot
+dd_source_data <- dd_source_data[dd_source_data$dataset != "aThy_Han20",
+                                 c("dataset", "cellID","annot","UMAP_1","UMAP_2",
+                                   "LRv1_fThyfull_fTFC1", "LRv1_fThyfull_fTFC2","LRv1_fThyfull_diff","score","cell_assignment", 
+                                   "PAX8",'NKX2.1','HHEX','FOXE1','GLIS3','TSHR' )]
+dd_source_data$dataset <- gsub('aThy_','adult_thyroid_',dd_source_data$dataset)
+dd_source_data$dataset <- factor(dd_source_data$dataset,c("adult_thyroid_Hong23", 
+                                                          "adult_thyroid_Pu21", "adult_thyroid_Wang22", 
+                                                          "adult_thyroid_Lu23", "adult_thyroid_Mosteiro23"))
+dd_source_data <- dd_source_data[order(dd_source_data$dataset),]
+saveFig(file.path("Figures/2611",'Fig2_aThy_UMAP_LRv1.fThy'),plotFun_aThy_UMAP_LRv1.fThy,rawData=dd_source_data,width = 17,height = 3.3,res = 500)  
 
 
 

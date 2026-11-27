@@ -1008,8 +1008,8 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     table(dd$driver_category)
     table(dd$driver[dd$driver_category == 'others'])
     
-    
-    p = ggplot(dd[dd$cancerNormal == 'Tumour',], aes(moduleType, normalised_score)) +
+    dd_plot <- dd[dd$cancerNormal == 'Tumour',]
+    p = ggplot(dd_plot, aes(moduleType, normalised_score)) +
       geom_hline(yintercept = 0,linetype=2,linewidth=0.3)+
       geom_quasirandom(size=0.6,width = 0.15,alpha=1)+
       geom_boxplot(aes(fill=moduleType),outlier.shape = NA,position = 'dodge', alpha = 0.5,width=0.5,linewidth=0.3,colour='black') +
@@ -1027,8 +1027,13 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
     
   }
   
-  plotDir = 'Figures/2508'
-  saveFig(file.path(plotDir,'Fig5c_fTFC1.2_moduleScore_bulkSamples_tumourOnly'),plotFun_fTFC_moduleScore,rawData=dd,width = 6,height = 4,res = 500)
+  plotDir = 'Figures/2611'
+  dir.create(plotDir,recursive = T)
+  dd_plot <- dd_plot[order(dd_plot$source),c("source","sampleID","sampleName","sex","ageGroup","ageCat","cancerType","moduleType","TotalScore","normalised_score","driver_category")]
+  dd_plot$ageGroup[grepl('paed',dd_plot$source)] = "paediatric"
+  dd_plot$source <- gsub("^REBC_THYR","Morton_2022",dd_plot$source)
+  saveFig(file.path(plotDir,'Fig5c_fTFC1.2_moduleScore_bulkSamples_tumourOnly'),plotFun_fTFC_moduleScore,rawData=dd_plot,width = 6,height = 4,res = 500)
+  
   
   
   plotFun_fTFC1.2_moduleScore_subFig15 = function(noFrame=FALSE,noPlot=FALSE){
@@ -1080,6 +1085,14 @@ fig4c_fThy_moduleScore_inBulkSamples = function(){
   }
   saveFig(file.path(plotDir,'SupFig15_fTFC1.2_moduleScore_bulkSamples_driver'),plotFun_fTFC1.2_moduleScore_Driver_subFig15,rawData=dd,width = 13,height = 3.5,res = 500)
   
+  
+  dd_supfig15 <- dd[order(dd$source,dd$moduleType,dd$cancerType,dd$group),c("source","sampleID","sampleName","sex","ageGroup","ageCat","cancerNormal","cancerType","moduleType","TotalScore","normalised_score","group")]
+  dd_supfig15$ageGroup[grepl('paed',dd_supfig15$source)] = "paediatric"
+  dd_supfig15$source <- as.character(dd_supfig15$source)
+  dd_supfig15$source <- gsub("^REBC_THYR","Morton_2022",dd_supfig15$source)
+  dd_supfig15$source <- gsub("Sanger","ThisStudy",dd_supfig15$source)
+  
+  saveFig(file.path("Figures/2611",'SupFig15_fTFC1.2_moduleScore_bulkSamples_driver'),plotFun_fTFC1.2_moduleScore_Driver_subFig15,rawData=dd_supfig15,width = 13,height = 3.5,res = 500)
   
   
   
